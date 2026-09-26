@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Publish the dashboard: writes web/app-config.js from the stack outputs,
 # uploads the sensor config and syncs web/ to the web bucket.
-#   tools/deploy_web.sh [stack-name]        (default: venko-demo)
+#   tools/deploy_web.sh [stack-name]        (default: sam-app)
 set -euo pipefail
-STACK="${1:-venko-demo}"
+STACK="${1:-sam-app}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 out() {

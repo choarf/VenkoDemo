@@ -6,14 +6,23 @@
   "units": {
     "Celsius": "°C",
     "unit": "pH",
-    "uc/cm": "µS/cm"
+    "uc/cm": "µS/cm",
+    "Celsius*10": "0.1 °C",
+    "*10%": "0.1 %HR",
+    "Mpa": "MPa"
   },
   "defaults": {
     "warn_margin": 0.1,
     "decimals": 2
   },
-  "groups": ["Temperatura", "Química", "Conductividad", "Ambiente"],
+  "groups": ["Temperatura", "Ambiente", "Presión", "Química", "Conductividad"],
   "sensors": {
+    "DEV_2.TempAgua":         { "label": "Temp. agua",         "group": "Temperatura", "decimals": 0 },
+    "DEV_3.TempAmb":          { "label": "Temp. ambiente",     "group": "Ambiente", "decimals": 0 },
+    "DEV_3.HumAmb":           { "label": "Humedad ambiente",   "group": "Ambiente", "decimals": 0 },
+    "DEV_4.Presion1":         { "label": "Presión 1",          "group": "Presión", "decimals": 0 },
+    "DEV_5.Presion2":         { "label": "Presión 2",          "group": "Presión", "decimals": 0 },
+
     "DEV_1.Pt100Sensor":      { "label": "Temperatura Pt100",  "group": "Temperatura" },
     "DEV_2.Ambient":          { "label": "Temp. ambiente",     "group": "Ambiente" },
     "DEV_3.Humedad":          { "label": "Humedad",            "group": "Ambiente", "decimals": 1 },

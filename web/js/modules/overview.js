@@ -42,7 +42,7 @@ function dialOptions(s) {
       plotBands: [band(lo, s.min, css("--bad")), band(s.min, s.min + w, css("--warn")),
                   band(s.max - w, s.max, css("--warn")), band(s.max, hi, css("--bad"))],
     },
-    plotOptions: { solidgauge: { innerRadius: "75%", dataLabels: { y: -22, borderWidth: 0, useHTML: false } } },
+    plotOptions: { solidgauge: { innerRadius: "75%", dataLabels: { y: -22, borderWidth: 0, useHTML: false, style: { textOutline: "none" } } } },
     credits: { enabled: false },
     exporting: { enabled: false },
     series: [{
@@ -64,10 +64,13 @@ function buildDials() {
   dials.clear();
   const groups = [...new Set(sensorsCfg.map((s) => s.group || ""))];
   for (const g of groups) {
-    if (g) host.append(el("div", { class: "group-title" }, g));
-    const grid = el("div", { class: "gauges" });
-    host.append(grid);
-    for (const s of sensorsCfg.filter((x) => (x.group || "") === g)) {
+    const members = sensorsCfg.filter((x) => (x.group || "") === g);
+    // Groups sit side by side, each sized by its dial count; the row wraps only when too narrow.
+    const grid = el("div", { class: "gauges", style: `grid-template-columns:repeat(${members.length}, minmax(0, 1fr))` });
+    const wrap = el("div", { class: "gauge-group", style: `flex:${members.length} 1 ${members.length * 180}px` },
+      el("div", { class: "group-title" }, g || "\u00a0"), grid);
+    host.append(wrap);
+    for (const s of members) {
       const box = el("div", { style: "height:180px" });
       const card = el("div", { class: "card gauge" }, box, el("div", { class: "lim" }, `Límites ${s.min} – ${s.max} ${s.unit}`));
       grid.append(card);

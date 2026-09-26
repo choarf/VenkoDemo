@@ -28,10 +28,17 @@ Parameters:
     Default: venko_demo
     AllowedPattern: "^[a-z0-9_]+$"
     Description: Athena/Glue database (lowercase, digits, underscore only)
+  WebBucketName:
+    Type: String
+    Default: ""
+    Description: Name for the dashboard bucket (globally unique). Empty = auto-generated. Changing it replaces the bucket; rerun tools/deploy_web.sh afterwards.
+
+Conditions:
+  HasWebBucketName: !Not [!Equals [!Ref WebBucketName, ""]]
 
 Globals:
   Function:
-    Runtime: python3.12
+    Runtime: python3.14
     Architectures: [arm64]
     MemorySize: 512
     CodeUri: ../backend/
@@ -49,6 +56,9 @@ Resources:
   # ---------------------------------------------------------------- storage
   DataBucket:
     Type: AWS::S3::Bucket
+    # Sensor history, reports and exports: never deleted by a stack delete or replacement.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub "venko-demo-${AWS::AccountId}-${AWS::Region}"
       PublicAccessBlockConfiguration:
@@ -237,7 +247,7 @@ Resources:
           OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
           SerdeInfo:
             SerializationLibrary: org.openx.data.jsonserde.JsonSerDe
-            Parameters: { ignore.malformed.json: "true" }
+            Parameters: { ignore.malformed.json: "true", case.insensitive: "false" }
           Columns:
             - { Name: ts, Type: string }
             - { Name: gw, Type: string }
@@ -269,7 +279,7 @@ Resources:
           OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
           SerdeInfo:
             SerializationLibrary: org.openx.data.jsonserde.JsonSerDe
-            Parameters: { ignore.malformed.json: "true" }
+            Parameters: { ignore.malformed.json: "true", case.insensitive: "false" }
           Columns:
             - { Name: ts, Type: string }
             - { Name: gw, Type: string }
@@ -363,6 +373,7 @@ Resources:
   WebBucket:
     Type: AWS::S3::Bucket
     Properties:
+      BucketName: !If [HasWebBucketName, !Ref WebBucketName, !Ref AWS::NoValue]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true

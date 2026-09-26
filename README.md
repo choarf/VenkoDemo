@@ -47,7 +47,7 @@ web/                           dashboard (index.html, css/, js/)
 
 - An AWS account in the same region as the gateway's IoT endpoint (`us-east-1`, from `config.json` → `aws.host`).
 - AWS CLI v2 with credentials that can create IAM roles, and the **AWS SAM CLI**.
-- Python 3.12+ locally (for `sync_config.py`; `boto3` needed for the upload).
+- Python 3.14 locally (matches the Lambda runtime, which `sam build` requires) (for `sync_config.py`; `boto3` needed for the upload).
 - The Akvo_Green gateway already publishing to AWS IoT Core (thing, certificate and policy exist). **No gateway code changes are required.**
 
 ---
@@ -59,7 +59,7 @@ web/                           dashboard (index.html, css/, js/)
 ```bash
 cd infra
 sam build --template template.yaml
-sam deploy --guided --stack-name venko-demo --capabilities CAPABILITY_IAM
+sam deploy --guided --stack-name sam-app --capabilities CAPABILITY_IAM
 ```
 
 Accept the defaults, or set the parameters:
@@ -71,6 +71,7 @@ Accept the defaults, or set the parameters:
 | `AllowedOrigin` | `*` | CORS origin; set to the dashboard URL after the first deploy (step 4) |
 | `ReportTimezone` | `America/Mexico_City` | Time zone for weekly report boundaries |
 | `GlueDatabaseName` | `venko_demo` | Athena database name |
+| `WebBucketName` | *(auto-generated)* | Name of the dashboard bucket. This stack uses `venko-demo-web-884520769610` (set in `samconfig.toml`). Changing it creates a new, empty bucket, so rerun `tools/deploy_web.sh` straight after |
 
 `sam deploy` prints the outputs `ApiUrl`, `ApiKeyId`, `DataBucketName`, `WebBucketName` and `DashboardUrl`.
 
@@ -79,7 +80,7 @@ Accept the defaults, or set the parameters:
 With the gateway running (or by publishing a sample from **AWS IoT → MQTT test client** to `AKVO/data`):
 
 ```bash
-BUCKET=$(aws cloudformation describe-stacks --stack-name venko-demo \
+BUCKET=$(aws cloudformation describe-stacks --stack-name sam-app \
   --query "Stacks[0].Outputs[?OutputKey=='DataBucketName'].OutputValue" --output text)
 aws s3 cp s3://$BUCKET/latest/data.json - | head -c 400; echo
 aws s3 ls s3://$BUCKET/raw/data/ --recursive | tail -3     # appears within ~60 s (Firehose buffer)
@@ -87,7 +88,7 @@ aws s3 ls s3://$BUCKET/raw/data/ --recursive | tail -3     # appears within ~60 
 
 If nothing appears, look in `s3://$BUCKET/errors/`, and check that the gateway's IoT policy allows `iot:Publish` on those topics.
 
-Athena check (workgroup `venko-demo-wg`, database `venko_demo`):
+Athena check (workgroup `sam-app-wg`, database `venko_demo`):
 
 ```sql
 SELECT from_unixtime(rx_ms/1000) AS t, d.device, s.sensor, r.val, r.status, r.alarm
@@ -101,7 +102,7 @@ ORDER BY rx_ms DESC LIMIT 20;
 ### 3. Publish the sensor config and the dashboard
 
 ```bash
-tools/deploy_web.sh venko-demo
+tools/deploy_web.sh sam-app
 ```
 
 The script:
@@ -113,9 +114,17 @@ The script:
 
 ```bash
 cd infra
-sam deploy --stack-name venko-demo --capabilities CAPABILITY_IAM \
+sam deploy --stack-name sam-app --capabilities CAPABILITY_IAM \
   --parameter-overrides AllowedOrigin=https://dxxxxxxxxxxxx.cloudfront.net
+
+# SAM does not republish the API stage when only a parameter changes, so the
+# CORS preflight keeps the old origin until the stage is redeployed:
+API_ID=$(aws cloudformation describe-stack-resource --stack-name sam-app \
+  --logical-resource-id Api --query StackResourceDetail.PhysicalResourceId --output text)
+aws apigateway create-deployment --rest-api-id "$API_ID" --stage-name prod
 ```
+
+Put the same `AllowedOrigin` in `infra/samconfig.toml` (`parameter_overrides`), otherwise a plain `sam deploy` resets it to `*`.
 
 Open `DashboardUrl`. The header pill should show **Gateway en línea**.
 
@@ -149,7 +158,7 @@ In **Históricos**, pick a range (or 1 h / 6 h / 24 h / 7 d), select sensors, th
 Generated automatically every Monday at 06:00 (Mexico City) for the previous ISO week (Mon–Sun), in HTML and Excel. To create one on demand, go to **Reportes**, enter a week (e.g. `2026-W39`, or leave it empty for last week) and click **Generar**. Or run:
 
 ```bash
-aws lambda invoke --function-name venko-demo-report \
+aws lambda invoke --function-name sam-app-report \
   --cli-binary-format raw-in-base64-out --payload '{"kind":"weekly","week":"2026-W39"}' /dev/stdout
 ```
 
@@ -157,9 +166,104 @@ aws lambda invoke --function-name venko-demo-report \
 
 ## Changing sensors or labels
 
-- **Add, remove or re-limit sensors:** edit the gateway config in Akvo_Green (its CSVs + `config_manager.py build`), deploy it to the Pi, then run `tools/deploy_web.sh` (or just `python3 tools/sync_config.py --bucket <data bucket>`). The API caches the config for up to 5 minutes.
-- **Change display names, units, grouping or warn margin:** edit `config/dashboard_overrides.json` and run the same sync. Keys are `DEVICE_ID.SensorName`, e.g. `DEV_5.PhSensor`.
-- **Preview the generated config without uploading:** `python3 tools/sync_config.py --out build/config.json`
+When Akvo_Green changes (more sensors, a new unit, new limits), the AWS stack does **not** need redeploying. Athena stores each message's sensors as a map, so new sensors appear in history, alarms and reports automatically. Only the gateway config and the dashboard config need updating.
+
+### The config pipeline
+
+```
+Akvo_Green/config_data/*.csv ──config_manager.py build──▶ Akvo_Green/config_data/config.json ──▶ Pi (gateway)
+                                                                      │
+config/dashboard_overrides.json ──────────────────────────────────────┤
+                                                                      ▼
+                                              tools/sync_config.py ──▶ s3://<data bucket>/config/config.json
+                                                                                  (read by the API and reports)
+```
+
+| Input | Sets |
+|---|---|
+| `devices.csv` | One row per sensor (grouped by `device_id`): Modbus slave/register, `scale`/`offset`, `unit`, `type`, alarm `min`/`max`, `enabled` |
+| `modbus.csv` | Serial port settings |
+| `system.csv` | `gateway_id`, time zone, poll/system intervals, watchdog |
+| `aws.csv` | IoT endpoint, MQTT `client_id`, cert paths, topics |
+| `config/dashboard_overrides.json` | Display only: site title, unit display names, per-sensor label/group/decimals |
+
+`Akvo_devices.csv` / `Osmosis_devices.csv` are saved sensor sets and are **not** read by the build. To switch sets, copy one over `devices.csv` and rebuild. The `aws` and `modbus` sections are never uploaded to S3.
+
+### Every change: three steps
+
+**1. Edit the CSV and rebuild the gateway config:**
+
+```bash
+cd ~/git_reps/claude/projects/Venko/Akvo_Green/gateway
+# edit ../config_data/devices.csv
+python3 config_manager.py build --dry-run   # validate and print
+python3 config_manager.py build             # writes config_data/config.json
+```
+
+**2. Copy the new `config.json` to the Pi's `config_data/`** (e.g. with `scp`). The gateway reloads it within 5 s without a restart.
+
+**3. Update the dashboard labels and publish the dashboard config:**
+
+```bash
+cd ~/git_reps/claude/projects/Venko/VenkoDemo
+# edit config/dashboard_overrides.json (only if labels/units/groups changed)
+python3 tools/sync_config.py --out build/config.json   # preview
+python3 tools/sync_config.py --bucket venko-demo-884520769610-us-east-1
+```
+
+- The API and reports cache the config for up to **5 minutes**. Reload the dashboard after that.
+- `tools/deploy_web.sh` also runs this step, but it re-uploads `web/` as well. It's only needed when the dashboard code changes.
+- `sync_config.py` reads Akvo_Green's `config.json` **on this machine**, so always build it here (step 1), even if you edited it on the Pi.
+
+### Common changes
+
+**Add a sensor.** Add a row to `devices.csv`:
+
+```
+device_id,slave,sensor_name,addr,count,scale,offset,unit,type,min,max,enabled
+DEV_6,4,Caudal,0,1,1,0,L/min,float,0,200,1
+```
+
+and its entry in `dashboard_overrides.json`:
+
+```json
+"DEV_6.Caudal": { "label": "Caudal", "group": "Flujo", "decimals": 1 }
+```
+
+Keys are always `DEVICE_ID.SensorName` and are case-sensitive. A sensor without an override still shows up, with its raw name and unit.
+
+**Only rename a displayed unit or label** (e.g. `Mpa` → `kPa`): step 3 only. Edit `units` or the sensor's entry in the overrides. The gateway and the stored values are unchanged.
+
+**Actually change the unit or scale** (e.g. show 20.3 °C instead of 203):
+
+```
+DEV_2,3,TempAgua,0,1,0.1,0,Celsius,float,0,50,1
+```
+
+- Change `scale`, `unit` **and** `min`/`max` together. Alarm limits apply to the value *after* scaling.
+- Keep `type` as `float`. `int`/`uint16` ignore `scale`.
+- Update the override too, e.g. `"decimals": 1`. `"Celsius": "°C"` is already in `units`.
+- Stored data **keeps the old scale**, so a chart or report covering the change mixes 203 and 20.3. Make the change between tests.
+
+**Disable a sensor.** Set `enabled` to `0`. It leaves the dashboard after step 3. Its old data stays in S3 and is still queryable in Athena.
+
+**Gateway name, intervals or time zone.** Edit `system.csv` and run the three steps. The report's "Gateway" field is `gateway_id` from `system.csv`. The `gw` column on stored messages is the MQTT `client_id` from `aws.csv`, added by the IoT rule. Don't change `client_id` unless the IoT policy allows the new name.
+
+**MQTT topics** (`topic_pub`/`topic_system` in `aws.csv`) are the one change that needs `sam deploy`:
+
+```bash
+cd infra
+sam deploy --parameter-overrides DataTopic=NEW/data SystemTopic=NEW/system
+```
+
+Also update the topics in `infra/samconfig.toml`, or the next plain `sam deploy` puts the old ones back.
+
+### Check afterwards
+
+- **Resumen:** the new or changed dial shows the right label and unit.
+- **Históricos:** the new sensor's chip is there. Its history starts when the Pi began sending it.
+- A sensor showing its raw name means the override key doesn't match. `sync_config.py` lists unmatched keys as `warning: overrides for sensors not in config: …`. Entries kept for another sensor set also appear there, which is expected.
+- Finished test reports keep the labels they were built with. Use **Reintentar** in Reportes to rebuild one with the current config.
 
 ---
 
@@ -209,8 +313,8 @@ All routes require the header `X-Api-Key`. Times are epoch ms or ISO-8601.
 | Dashboard shows "No se pudo cargar la configuración" | `web/app-config.js` values; `config/config.json` missing → run `sync_config.py` |
 | Pill says *Gateway sin datos* | Gateway running and connected? `latest/data.json` timestamp; `errors/iot/` in the bucket |
 | History empty but live works | Firehose buffers ~60 s; check `raw/data/dt=…/` exists; `PartitionStartDate` not after your data |
-| History/alarms error "query failed" | Athena console → workgroup `venko-demo-wg` → recent queries for the message |
-| Report stuck on *Generando reporte…* | CloudWatch logs of `venko-demo-report`; use **Reintentar** |
+| History/alarms error "query failed" | Athena console → workgroup `sam-app-wg` → recent queries for the message |
+| Report stuck on *Generando reporte…* | CloudWatch logs of `sam-app-report`; use **Reintentar** |
 | CORS error in browser console | `AllowedOrigin` must equal the exact dashboard origin |
 
 **Data retention:** raw data moves to S3 Infrequent Access after 90 days and is never deleted automatically. Athena results and exports expire after 7 days. Reports are kept.
@@ -221,4 +325,4 @@ All routes require the header `X-Api-Key`. Times are epoch ms or ISO-8601.
 - The API key is visible to anyone who can load the page. It only gates and throttles casual access. For a public demo, add Cognito login or CloudFront access restrictions.
 - Highcharts requires a commercial license for commercial use.
 
-**Remove everything:** empty both buckets, then `sam delete --stack-name venko-demo`.
+**Remove everything:** empty the web bucket, then `sam delete --stack-name sam-app`. The data bucket (`venko-demo-<account>-<region>`) has `DeletionPolicy: Retain`, so the stack delete leaves it and its sensor history in place. Empty and delete it by hand only if you really want the data gone.

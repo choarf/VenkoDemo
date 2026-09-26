@@ -1,0 +1,14 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "sam-app"
+resolve_s3 = true
+s3_prefix = "sam-app"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "DataTopic=\"AKVO/data\" SystemTopic=\"AKVO/system\" PartitionStartDate=\"2026-01-01\" AllowedOrigin=\"https://ddlxtxblzvu22.cloudfront.net\" ReportTimezone=\"America/Mexico_City\" GlueDatabaseName=\"venko_demo\" WebBucketName=\"venko-demo-web-884520769610\""
+image_repositories = []
+
+[default.global.parameters]
+region = "us-east-1"
