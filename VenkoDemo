@@ -1,0 +1,23 @@
+VenkoDemo
+Main parts
+- Akvo
+--base on Akvo_Green /home/chris/git_reps/claude/projects/Venko/Akvo_Green and /
+- AWS - iot
+-- simple implention
+-- store data in S3
+-Web page
+-- Dashboard based on config.json from Akvo_Green
+-- get info from S3
+--- dials for each sensor, system data table.
+--- Start / Stop test events  HMI
+--- at the end provide repert
+--- free run only monitor
+---  alarms
+--- feed commnents to the sensor iot report
+--- use highcharts
+--- use file:///home/chris/udepachuca/AKVO-Dashboard-V6/index.html as baseline
+- Reports
+-- test report
+-Storage data
+-- able to query time range, sensor
+-- weekly report  in excel or html

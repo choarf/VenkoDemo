@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Venko Demo</title>
+<link rel="stylesheet" href="css/dashboard.css">
+<script src="https://code.highcharts.com/12.1.2/highcharts.js"></script>
+<script src="https://code.highcharts.com/12.1.2/highcharts-more.js"></script>
+<script src="https://code.highcharts.com/12.1.2/modules/solid-gauge.js"></script>
+<script src="https://code.highcharts.com/12.1.2/modules/exporting.js"></script>
+<script src="https://code.highcharts.com/12.1.2/modules/no-data-to-display.js"></script>
+<script src="app-config.js"></script>
+</head>
+<body class="dark">
+<div class="layout">
+  <aside>
+    <div class="brand" id="brand">Ghotrix - Semca</div>
+    <nav>
+      <a href="#overview" data-view="overview">Resumen</a>
+      <a href="#test" data-view="test">Prueba (HMI)</a>
+      <a href="#alarms" data-view="alarms">Alarmas <span class="badge" id="navAlarmCount" hidden></span></a>
+      <a href="#history" data-view="history">Históricos</a>
+      <a href="#reports" data-view="reports">Reportes</a>
+    </nav>
+    <div class="aside-foot" id="gwInfo"></div>
+  </aside>
+
+  <main>
+    <header>
+      <div>
+        <h1 id="siteTitle">Venko Demo</h1>
+        <div class="sub" id="modeLine"><span class="pill" id="modePill">Monitoreo libre</span></div>
+      </div>
+      <div class="header-right">
+        <span class="pill" id="linkPill">—</span>
+        <button class="ghost" id="themeBtn" type="button">Fondo</button>
+      </div>
+    </header>
+    <div class="banner error" id="errorBanner" hidden></div>
+
+    <!-- ============ Overview / free run ============ -->
+    <section class="view" id="view-overview">
+      <div class="kpis">
+        <div class="kpi"><span>Sensores OK</span><b id="kpiOk">—</b></div>
+        <div class="kpi"><span>En alarma</span><b id="kpiAlarm">—</b></div>
+        <div class="kpi"><span>Error de lectura</span><b id="kpiErr">—</b></div>
+        <div class="kpi"><span>Última lectura</span><b id="kpiAge">—</b></div>
+      </div>
+      <div id="dials"></div>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Datos del sistema</h3>
+          <table class="kv" id="systemTable"></table>
+        </div>
+        <div class="card">
+          <h3>Alarmas activas</h3>
+          <table id="activeAlarmsMini"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Test HMI ============ -->
+    <section class="view" id="view-test" hidden>
+      <div class="grid-2">
+        <div class="card" id="hmiCard">
+          <h3>Control de prueba</h3>
+          <form id="startForm" autocomplete="off">
+            <label>Nombre de la prueba<input name="name" required maxlength="120"></label>
+            <label>Operador<input name="operator" required maxlength="80"></label>
+            <label>Notas<textarea name="notes" rows="2" maxlength="2000"></textarea></label>
+            <button class="btn start" type="submit">▶ Iniciar prueba</button>
+          </form>
+          <div id="runningBox" hidden>
+            <div class="running">
+              <div><span class="muted">Prueba</span><b id="runName"></b></div>
+              <div><span class="muted">Operador</span><b id="runOperator"></b></div>
+              <div><span class="muted">Inicio</span><b id="runStart"></b></div>
+              <div><span class="muted">Tiempo</span><b class="clock" id="runElapsed">00:00:00</b></div>
+            </div>
+            <button class="btn stop" id="stopBtn" type="button">■ Detener prueba</button>
+            <button class="btn ghost" id="stopCancel" type="button" hidden>Cancelar</button>
+          </div>
+          <p class="muted small" id="hmiMsg"></p>
+        </div>
+
+        <div class="card">
+          <h3>Comentarios <span class="muted small" id="commentScope"></span></h3>
+          <form id="commentForm" autocomplete="off" class="row-form">
+            <select name="sensor" id="commentSensor"><option value="">General</option></select>
+            <input name="author" placeholder="Autor" required maxlength="80">
+            <input name="text" placeholder="Comentario…" required maxlength="2000" class="grow">
+            <button class="btn" type="submit">Agregar</button>
+          </form>
+          <ul class="comments" id="commentList"></ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>Tendencia en vivo</h3>
+          <div class="chips" id="trendPicker"></div>
+        </div>
+        <div class="chart-lg" id="testTrend"></div>
+      </div>
+
+      <div class="card">
+        <h3>Pruebas recientes</h3>
+        <table id="testsTable"></table>
+      </div>
+    </section>
+
+    <!-- ============ Alarms ============ -->
+    <section class="view" id="view-alarms" hidden>
+      <div class="card">
+        <h3>Alarmas activas</h3>
+        <table id="activeAlarms"></table>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h3>Historial de alarmas</h3>
+          <div class="row-form">
+            <select id="alarmRange">
+              <option value="24">Últimas 24 h</option>
+              <option value="168">Últimos 7 días</option>
+              <option value="720">Últimos 30 días</option>
+            </select>
+            <button class="btn" id="alarmLoad" type="button">Consultar</button>
+          </div>
+        </div>
+        <table id="alarmHistory"></table>
+        <div class="chart-md" id="alarmChart" hidden></div>
+      </div>
+    </section>
+
+    <!-- ============ History / query ============ -->
+    <section class="view" id="view-history" hidden>
+      <div class="card">
+        <div class="row-form wrap">
+          <label>Desde<input type="datetime-local" id="histFrom"></label>
+          <label>Hasta<input type="datetime-local" id="histTo"></label>
+          <div class="quick">
+            <button class="ghost" data-hours="1" type="button">1 h</button>
+            <button class="ghost" data-hours="6" type="button">6 h</button>
+            <button class="ghost" data-hours="24" type="button">24 h</button>
+            <button class="ghost" data-hours="168" type="button">7 d</button>
+          </div>
+          <button class="btn" id="histLoad" type="button">Consultar</button>
+          <button class="btn ghost" id="histXlsx" type="button">Excel</button>
+          <button class="btn ghost" id="histCsv" type="button">CSV</button>
+        </div>
+        <div class="chips" id="histPicker"></div>
+        <p class="muted small" id="histMsg">Las horas se muestran en la zona del gateway.</p>
+      </div>
+      <div class="card"><div class="chart-xl" id="histChart"></div></div>
+    </section>
+
+    <!-- ============ Reports ============ -->
+    <section class="view" id="view-reports" hidden>
+      <div class="card">
+        <h3>Reportes de prueba</h3>
+        <table id="testReports"></table>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h3>Reportes semanales</h3>
+          <div class="row-form">
+            <input id="weekInput" placeholder="2026-W39" pattern="\d{4}-W\d{2}" size="10">
+            <button class="btn" id="weekBtn" type="button">Generar</button>
+          </div>
+        </div>
+        <table id="weeklyReports"></table>
+        <p class="muted small" id="weekMsg">Se generan automáticamente cada lunes 06:00 (semana anterior).</p>
+      </div>
+    </section>
+  </main>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

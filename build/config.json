@@ -1,0 +1,206 @@
+{
+  "generated_at": "2026-09-25T20:33:18.904450+00:00",
+  "source_hash": "60d5a0cf07a998339e6e93701e432826",
+  "site": {
+    "title": "Venko Demo – Akvo Green",
+    "brand": "Ghotrix - Semca"
+  },
+  "groups": [
+    "Temperatura",
+    "Química",
+    "Conductividad",
+    "Ambiente"
+  ],
+  "gateway": {
+    "gateway_id": "AKVO_GW_101",
+    "city": "America/Mexico_City",
+    "poll_interval": 20,
+    "system_interval": 60
+  },
+  "topics": {
+    "data": "AKVO/data",
+    "system": "AKVO/system"
+  },
+  "sensors": [
+    {
+      "key": "DEV_1.Pt100Sensor",
+      "device": "DEV_1",
+      "name": "Pt100Sensor",
+      "label": "Temperatura Pt100",
+      "unit": "°C",
+      "min": 0.0,
+      "max": 55.0,
+      "group": "Temperatura",
+      "decimals": 2,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_2.Ambient",
+      "device": "DEV_2",
+      "name": "Ambient",
+      "label": "Temp. ambiente",
+      "unit": "°C",
+      "min": 0.0,
+      "max": 55.0,
+      "group": "Ambiente",
+      "decimals": 2,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_3.Humedad",
+      "device": "DEV_3",
+      "name": "Humedad",
+      "label": "Humedad",
+      "unit": "%",
+      "min": 0.0,
+      "max": 80.0,
+      "group": "Ambiente",
+      "decimals": 1,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_4.ORPSensor",
+      "device": "DEV_4",
+      "name": "ORPSensor",
+      "label": "ORP",
+      "unit": "mV",
+      "min": -1500.0,
+      "max": 1500.0,
+      "group": "Química",
+      "decimals": 0,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_5.PhSensor",
+      "device": "DEV_5",
+      "name": "PhSensor",
+      "label": "pH",
+      "unit": "pH",
+      "min": 0.0,
+      "max": 14.0,
+      "group": "Química",
+      "decimals": 2,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_6.TempPhSensor",
+      "device": "DEV_6",
+      "name": "TempPhSensor",
+      "label": "Temp. pH",
+      "unit": "°C",
+      "min": 0.0,
+      "max": 55.0,
+      "group": "Temperatura",
+      "decimals": 2,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_7.DOSensor",
+      "device": "DEV_7",
+      "name": "DOSensor",
+      "label": "Oxígeno disuelto",
+      "unit": "mg/L",
+      "min": 0.0,
+      "max": 2500.0,
+      "group": "Química",
+      "decimals": 2,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_8.CODSensor",
+      "device": "DEV_8",
+      "name": "CODSensor",
+      "label": "DQO (COD)",
+      "unit": "mg/L",
+      "min": 0.0,
+      "max": 1500.0,
+      "group": "Química",
+      "decimals": 2,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_9.TempCODSensor",
+      "device": "DEV_9",
+      "name": "TempCODSensor",
+      "label": "Temp. DQO",
+      "unit": "°C",
+      "min": 0.0,
+      "max": 55.0,
+      "group": "Temperatura",
+      "decimals": 2,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_10.TurbCODSensort",
+      "device": "DEV_10",
+      "name": "TurbCODSensort",
+      "label": "Turbidez",
+      "unit": "NTU",
+      "min": 0.0,
+      "max": 100.0,
+      "group": "Química",
+      "decimals": 2,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_11.BODSensor",
+      "device": "DEV_11",
+      "name": "BODSensor",
+      "label": "DBO (BOD)",
+      "unit": "mg/L",
+      "min": 0.0,
+      "max": 40.0,
+      "group": "Química",
+      "decimals": 2,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_12.TOCSensor",
+      "device": "DEV_12",
+      "name": "TOCSensor",
+      "label": "COT (TOC)",
+      "unit": "mg/L",
+      "min": 0.0,
+      "max": 300.0,
+      "group": "Química",
+      "decimals": 2,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_13.CondSensor",
+      "device": "DEV_13",
+      "name": "CondSensor",
+      "label": "Conductividad",
+      "unit": "µS/cm",
+      "min": 0.0,
+      "max": 200.0,
+      "group": "Conductividad",
+      "decimals": 2,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_14.TempCondSensor",
+      "device": "DEV_14",
+      "name": "TempCondSensor",
+      "label": "Temp. conductividad",
+      "unit": "°C",
+      "min": 0.0,
+      "max": 55.0,
+      "group": "Temperatura",
+      "decimals": 2,
+      "warn_margin": 0.1
+    },
+    {
+      "key": "DEV_15.TDSCondSensor",
+      "device": "DEV_15",
+      "name": "TDSCondSensor",
+      "label": "TDS",
+      "unit": "uS/cm",
+      "min": 10.0,
+      "max": 5000.0,
+      "group": "Conductividad",
+      "decimals": 0,
+      "warn_margin": 0.1
+    }
+  ]
+}

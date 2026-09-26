@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ ctx.title }}</title>
+<script src="https://code.highcharts.com/{{ ctx.highcharts_version }}/highcharts.js"></script>
+<script src="https://code.highcharts.com/{{ ctx.highcharts_version }}/highcharts-more.js"></script>
+<style>
+  :root { --navy:#0f2235; --fg:#1d2430; --muted:#5d6878; --line:#d9e0ea; --bad:#c62828; --warn:#ef6c00; --ok:#2e7d32; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; color: var(--fg); background: #fff; }
+  header { background: var(--navy); color: #fff; padding: 20px 28px; }
+  header h1 { margin: 0 0 4px; font-size: 22px; }
+  header p { margin: 0; opacity: .8; font-size: 13px; }
+  main { padding: 20px 28px; max-width: 1200px; }
+  h2 { font-size: 17px; border-bottom: 2px solid var(--navy); padding-bottom: 4px; margin-top: 28px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .kpi { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .kpi span { display: block; font-size: 12px; color: var(--muted); }
+  .kpi b { font-size: 20px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: right; }
+  th:first-child, td:first-child, td.l, th.l { text-align: left; }
+  th { background: #f1f4f8; }
+  .st { font-weight: 600; }
+  .st.OK { color: var(--ok); } .st.ALARMA { color: var(--bad); } .st.SIN { color: var(--warn); }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+  .chart { height: 240px; border: 1px solid var(--line); border-radius: 8px; }
+  .meta td { text-align: left; } .meta td:first-child { color: var(--muted); width: 180px; }
+  .empty { color: var(--muted); font-style: italic; }
+  @media print { header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .chart { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>{{ ctx.title }}</h1>
+  <p>{{ ctx.site.brand }} · {{ ctx.site.title }} · Gateway {{ ctx.gateway.gateway_id }} · {{ ctx.from_local }} → {{ ctx.to_local }} ({{ ctx.tz }})</p>
+</header>
+<main>
+  <section class="kpis">
+    <div class="kpi"><span>Duración</span><b>{{ ctx.duration_h }} h</b></div>
+    <div class="kpi"><span>Disponibilidad de datos</span><b>{{ ctx.data_availability }} %</b></div>
+    <div class="kpi"><span>Sensores en alarma</span><b>{{ ctx.alarm_sensor_count }} / {{ ctx.sensors|length }}</b></div>
+    <div class="kpi"><span>Eventos de alarma</span><b>{{ ctx.episodes|length }}</b></div>
+    <div class="kpi"><span>Comentarios</span><b>{{ ctx.comments|length }}</b></div>
+  </section>
+
+  {% if ctx.meta %}
+  <h2>Datos de la prueba</h2>
+  <table class="meta">
+    {% for k, v in ctx.meta.items() if v not in (None, "") %}<tr><td>{{ k|capitalize }}</td><td>{{ v }}</td></tr>{% endfor %}
+  </table>
+  {% endif %}
+
+  <h2>Resumen por sensor</h2>
+  <table>
+    <tr><th>Sensor</th><th>Unidad</th><th>Límites</th><th>Muestras</th><th>Disp. %</th><th>Mín</th><th>Prom</th><th>Máx</th><th>Desv.</th><th>Último</th><th>% alarma</th><th>Estado</th></tr>
+    {% for s in ctx.sensors %}
+    <tr>
+      <td>{{ s.label }}</td><td>{{ s.unit }}</td><td>{{ s.lim_min }} – {{ s.lim_max }}</td>
+      <td>{{ s.samples }}</td><td>{{ s.availability }}</td>
+      <td>{{ s.min if s.min is not none else "—" }}</td><td>{{ s.avg if s.avg is not none else "—" }}</td>
+      <td>{{ s.max if s.max is not none else "—" }}</td><td>{{ s.std if s.std is not none else "—" }}</td>
+      <td>{{ s.last if s.last is not none else "—" }}</td><td>{{ s.alarm_pct if s.alarm_pct is not none else "—" }}</td>
+      <td class="st {{ s.status.split(' ')[0] }}">{{ s.status }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h2>Tendencias (promedio cada {{ ctx.bucket_min }} min, banda mín–máx)</h2>
+  <div class="charts" id="charts"></div>
+
+  <h2>Eventos de alarma</h2>
+  {% if ctx.episodes %}
+  <table>
+    <tr><th>Sensor</th><th class="l">Tipo</th><th class="l">Inicio</th><th class="l">Fin</th><th>Minutos</th><th>Muestras</th><th>Pico</th></tr>
+    {% for e in ctx.episodes %}
+    <tr><td>{{ e.label }}</td><td class="l">{{ e.kind }}</td><td class="l">{{ e.start_local }}</td><td class="l">{{ e.end_local }}</td>
+        <td>{{ e.minutes }}</td><td>{{ e.samples }}</td><td>{{ e.peak if e.peak is not none else "—" }} {{ e.unit }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="empty">Sin alarmas en el periodo.</p>{% endif %}
+
+  <h2>Comentarios</h2>
+  {% if ctx.comments %}
+  <table>
+    <tr><th class="l">Hora</th><th class="l">Autor</th><th class="l">Sensor</th><th class="l">Comentario</th></tr>
+    {% for c in ctx.comments %}
+    <tr><td class="l">{{ c.time_local }}</td><td class="l">{{ c.author }}</td><td class="l">{{ c.sensor }}</td><td class="l">{{ c.text }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="empty">Sin comentarios.</p>{% endif %}
+
+  <h2>Huecos de datos (gateway sin reportar)</h2>
+  {% if ctx.gaps %}
+  <table>
+    <tr><th class="l">Inicio</th><th class="l">Fin</th><th>Minutos</th></tr>
+    {% for g in ctx.gaps %}<tr><td class="l">{{ g.start_local }}</td><td class="l">{{ g.end_local }}</td><td>{{ g.minutes }}</td></tr>{% endfor %}
+  </table>
+  {% else %}<p class="empty">Sin huecos: el gateway reportó continuamente.</p>{% endif %}
+
+  <h2>Sistema</h2>
+  {% if ctx.system %}
+  <table class="meta">
+    {% for k, v in ctx.system.items() %}<tr><td>{{ k }}</td><td>{{ v }}</td></tr>{% endfor %}
+  </table>
+  {% else %}<p class="empty">Sin datos de sistema.</p>{% endif %}
+
+  <p class="empty">Generado {{ ctx.generated_local }} · VenkoDemo</p>
+</main>
+<script>
+  const CHARTS = {{ charts_json|safe }};
+  Highcharts.setOptions({ time: { timezone: {{ ctx.tz|tojson }} }, credits: { enabled: false } });
+  const host = document.getElementById("charts");
+  CHARTS.forEach((c, i) => {
+    const el = document.createElement("div");
+    el.className = "chart";
+    host.appendChild(el);
+    const lim = [c.min, c.max].filter(v => v !== null).map(v => ({ value: v, color: "#c62828", width: 1, dashStyle: "Dash" }));
+    Highcharts.chart(el, {
+      title: { text: `${c.label} (${c.unit})`, style: { fontSize: "13px" } },
+      legend: { enabled: false },
+      xAxis: { type: "datetime" },
+      yAxis: { title: { text: null }, plotLines: lim },
+      tooltip: { shared: true, valueDecimals: 2 },
+      series: [
+        { type: "arearange", name: "mín–máx", data: c.data.map(p => [p[0], p[2], p[3]]), color: "#1565C0", fillOpacity: .15, lineWidth: 0, marker: { enabled: false } },
+        { type: "line", name: "prom", data: c.data.map(p => [p[0], p[1]]), color: "#1565C0", lineWidth: 1.5, marker: { enabled: false } }
+      ],
+      lang: { noData: "Sin datos" }
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "site": {
+    "title": "Venko Demo – Akvo Green",
+    "brand": "Ghotrix - Semca"
+  },
+  "units": {
+    "Celsius": "°C",
+    "unit": "pH",
+    "uc/cm": "µS/cm"
+  },
+  "defaults": {
+    "warn_margin": 0.1,
+    "decimals": 2
+  },
+  "groups": ["Temperatura", "Química", "Conductividad", "Ambiente"],
+  "sensors": {
+    "DEV_1.Pt100Sensor":      { "label": "Temperatura Pt100",  "group": "Temperatura" },
+    "DEV_2.Ambient":          { "label": "Temp. ambiente",     "group": "Ambiente" },
+    "DEV_3.Humedad":          { "label": "Humedad",            "group": "Ambiente", "decimals": 1 },
+    "DEV_4.ORPSensor":        { "label": "ORP",                "group": "Química", "decimals": 0 },
+    "DEV_5.PhSensor":         { "label": "pH",                 "group": "Química" },
+    "DEV_6.TempPhSensor":     { "label": "Temp. pH",           "group": "Temperatura" },
+    "DEV_7.DOSensor":         { "label": "Oxígeno disuelto",   "group": "Química" },
+    "DEV_8.CODSensor":        { "label": "DQO (COD)",          "group": "Química" },
+    "DEV_9.TempCODSensor":    { "label": "Temp. DQO",          "group": "Temperatura" },
+    "DEV_10.TurbCODSensort":  { "label": "Turbidez",           "group": "Química" },
+    "DEV_11.BODSensor":       { "label": "DBO (BOD)",          "group": "Química" },
+    "DEV_12.TOCSensor":       { "label": "COT (TOC)",          "group": "Química" },
+    "DEV_13.CondSensor":      { "label": "Conductividad",      "group": "Conductividad" },
+    "DEV_14.TempCondSensor":  { "label": "Temp. conductividad","group": "Temperatura" },
+    "DEV_15.TDSCondSensor":   { "label": "TDS",                "group": "Conductividad", "decimals": 0 }
+  }
+}
