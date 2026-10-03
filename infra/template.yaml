@@ -32,9 +32,14 @@ Parameters:
     Type: String
     Default: ""
     Description: Name for the dashboard bucket (globally unique). Empty = auto-generated. Changing it replaces the bucket; rerun tools/deploy_web.sh afterwards.
+  DataBucketName:
+    Type: String
+    Default: ""
+    Description: Name for the data bucket (globally unique). Empty = venko-demo-<account>-<region> (the first site's bucket). Each extra site must set its own. Never change it on a running stack - the retained old bucket keeps the history.
 
 Conditions:
   HasWebBucketName: !Not [!Equals [!Ref WebBucketName, ""]]
+  HasDataBucketName: !Not [!Equals [!Ref DataBucketName, ""]]
 
 Globals:
   Function:
@@ -60,7 +65,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub "venko-demo-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !If [HasDataBucketName, !Ref DataBucketName, !Sub "venko-demo-${AWS::AccountId}-${AWS::Region}"]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true

@@ -66,7 +66,7 @@ function buildDials() {
   for (const g of groups) {
     const members = sensorsCfg.filter((x) => (x.group || "") === g);
     // Groups sit side by side, each sized by its dial count; the row wraps only when too narrow.
-    const grid = el("div", { class: "gauges", style: `grid-template-columns:repeat(${members.length}, minmax(0, 1fr))` });
+    const grid = el("div", { class: "gauges", style: `grid-template-columns:repeat(${members.length}, minmax(0, 320px))` });
     const wrap = el("div", { class: "gauge-group", style: `flex:${members.length} 1 ${members.length * 180}px` },
       el("div", { class: "group-title" }, g || "\u00a0"), grid);
     host.append(wrap);

@@ -12,3 +12,17 @@ image_repositories = []
 
 [default.global.parameters]
 region = "us-east-1"
+
+# Site "akvo" - deploy with: sam deploy --config-env akvo
+[akvo.deploy.parameters]
+stack_name = "venko-akvo"
+resolve_s3 = true
+s3_prefix = "venko-akvo"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "DataTopic=\"VENKO/akvo/data\" SystemTopic=\"VENKO/akvo/system\" PartitionStartDate=\"2026-09-01\" AllowedOrigin=\"https://dsm04m3n65m8j.cloudfront.net\" ReportTimezone=\"America/Mexico_City\" GlueDatabaseName=\"venko_akvo\" DataBucketName=\"venko-akvo-884520769610-us-east-1\" WebBucketName=\"venko-akvo-web-884520769610\""
+image_repositories = []
+
+[akvo.global.parameters]
+region = "us-east-1"

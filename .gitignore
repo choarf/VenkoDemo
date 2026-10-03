@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# SAM build output
+infra/.aws-sam/
+
+# Generated locally (sync_config.py --out build/...)
+build/
+
+# Per-site API URL + key; deploy_web.sh uploads it straight to the web bucket
+web/app-config.js

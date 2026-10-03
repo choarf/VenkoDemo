@@ -34,9 +34,10 @@ backend/api/                   Lambda handlers (router.py = API entry, reports.p
 backend/common/                Athena, S3, DynamoDB helpers, SQL builders, report builder (HTML + XLSX)
 backend/templates/             report.html.j2
 backend/tests/                 pytest unit tests (no AWS needed)
-config/dashboard_overrides.json  display labels, units, groups, warn margin per sensor
+config/dashboard_overrides.json  display labels, units, groups, warn margin per sensor (site 1)
+config/sites/<key>.json        the same, for each additional site (see Adding a site)
 tools/sync_config.py           Akvo_Green config.json → dashboard config (uploads to S3)
-tools/deploy_web.sh            writes web/app-config.js and publishes web/ to S3/CloudFront
+tools/deploy_web.sh            uploads the dashboard config + app-config.js and publishes web/ to S3/CloudFront
 tools/mock_api.py              local UI server with SYNTHETIC data (development only)
 web/                           dashboard (index.html, css/, js/)
 ```
@@ -72,6 +73,7 @@ Accept the defaults, or set the parameters:
 | `ReportTimezone` | `America/Mexico_City` | Time zone for weekly report boundaries |
 | `GlueDatabaseName` | `venko_demo` | Athena database name |
 | `WebBucketName` | *(auto-generated)* | Name of the dashboard bucket. This stack uses `venko-demo-web-884520769610` (set in `samconfig.toml`). Changing it creates a new, empty bucket, so rerun `tools/deploy_web.sh` straight after |
+| `DataBucketName` | `venko-demo-<account>-<region>` | Name of the data bucket. Leave empty for site 1; every additional site sets its own. **Never change it on a running stack**: the old bucket (and its history) is retained and the stack starts over with an empty one |
 
 `sam deploy` prints the outputs `ApiUrl`, `ApiKeyId`, `DataBucketName`, `WebBucketName` and `DashboardUrl`.
 
@@ -102,13 +104,18 @@ ORDER BY rx_ms DESC LIMIT 20;
 ### 3. Publish the sensor config and the dashboard
 
 ```bash
-tools/deploy_web.sh sam-app
+tools/deploy_web.sh [stack] [gateway-config.json] [overrides.json]
+tools/deploy_web.sh                      # site 1: sam-app, Akvo_Green/config_data/config.json, config/dashboard_overrides.json
 ```
 
 The script:
-1. Runs `tools/sync_config.py`, which reads `Akvo_Green/config_data/config.json`, keeps only the gateway timing and sensors (the `aws`/`modbus` sections with certificate paths are **never** uploaded), merges `config/dashboard_overrides.json`, and uploads `s3://<data bucket>/config/config.json`.
-2. Writes `web/app-config.js` with the API URL and API key (git-ignored).
-3. Syncs `web/` to the web bucket and prints the dashboard URL.
+1. Builds the dashboard config with `tools/sync_config.py`: reads the gateway `config.json`, keeps only the gateway timing and sensors (the `aws`/`modbus` sections with certificate paths are **never** uploaded) and merges the overrides.
+2. **Checks the topics:** if the config's `topic_pub`/`topic_system` differ from the stack's `DataTopic`/`SystemTopic`, it stops and uploads nothing. This catches publishing the wrong site's (or a half-edited) config.
+3. Uploads `s3://<data bucket>/config/config.json`.
+4. Uploads `app-config.js` (API URL + key for that stack) straight to the web bucket. Nothing is written into `web/`, so sites can't overwrite each other.
+5. Syncs `web/` to the web bucket and prints the dashboard URL.
+
+Browsers may keep old dashboard files cached after an update; a hard reload (Ctrl+Shift+R) picks up the new version.
 
 ### 4. Lock CORS to the dashboard URL (recommended)
 
@@ -264,6 +271,151 @@ Also update the topics in `infra/samconfig.toml`, or the next plain `sam deploy`
 - **Históricos:** the new sensor's chip is there. Its history starts when the Pi began sending it.
 - A sensor showing its raw name means the override key doesn't match. `sync_config.py` lists unmatched keys as `warning: overrides for sensors not in config: …`. Entries kept for another sensor set also appear there, which is expected.
 - Finished test reports keep the labels they were built with. Use **Reintentar** in Reportes to rebuild one with the current config.
+
+---
+
+## Adding a site (another Pi + its own AWS stack and dashboard)
+
+Each site is self-contained: **one Raspberry Pi, one AWS stack, one dashboard**. Sites share the AWS account, the IoT endpoint and the code (one Akvo_Green repo, one VenkoDemo repo); they share no data, buckets, API keys or URLs.
+
+```
+Site 1 (existing)                          Site "akvo"
+Pi 1  client AKVO_Gateway                  Pi 2  client AKVO_Akvo
+      topics AKVO/data, AKVO/system              topics VENKO/akvo/data, VENKO/akvo/system
+Stack sam-app                              Stack venko-akvo
+      data  venko-demo-884520769610-…            data  venko-akvo-884520769610-us-east-1
+      web   https://ddlxtxblzvu22…               web   https://dsm04m3n65m8j.cloudfront.net
+```
+
+### Sites in this account
+
+| | Site 1 | akvo |
+|---|---|---|
+| Gateway config | `Akvo_Green/config_data/` | `Akvo_Green/sites/akvo/config_data/` |
+| Certificates | `Akvo_Green/gateway/certs/` | `Akvo_Green/sites/akvo/certs/` (git-ignored) |
+| MQTT client / gateway id | `AKVO_Gateway` | `AKVO_Akvo` |
+| Topics | `AKVO/data`, `AKVO/system` | `VENKO/akvo/data`, `VENKO/akvo/system` |
+| IoT policy | `AllIoTAcessPolicy` (allows everything) | `venko-akvo-gateway` (only its client id + `VENKO/akvo/*`) |
+| Stack / samconfig env | `sam-app` / `default` | `venko-akvo` / `akvo` |
+| Data bucket | `venko-demo-884520769610-us-east-1` | `venko-akvo-884520769610-us-east-1` |
+| Athena DB / workgroup | `venko_demo` / `sam-app-wg` | `venko_akvo` / `venko-akvo-wg` |
+| Dashboard labels | `config/dashboard_overrides.json` | `config/sites/akvo.json` |
+| Dashboard | https://ddlxtxblzvu22.cloudfront.net | https://dsm04m3n65m8j.cloudfront.net |
+
+### Naming convention
+
+Pick a short **site key** (lowercase, e.g. `akvo`) and derive every name from it:
+
+| Item | Value |
+|---|---|
+| MQTT `client_id` = `gateway_id` | `AKVO_<Key>` - **must be unique**: two Pis with the same client id keep disconnecting each other |
+| Topics | `VENKO/<key>/data`, `VENKO/<key>/system` |
+| IoT policy / thing | `venko-<key>-gateway` / `AKVO_<Key>` |
+| Stack / samconfig env | `venko-<key>` / `<key>` |
+| Data bucket | `venko-<key>-<account>-<region>` |
+| Web bucket | `venko-<key>-web-<account>` |
+| Athena DB | `venko_<key>` |
+
+### Step by step (example: key `plant2`)
+
+**1. Gateway config** (dev machine, in Akvo_Green):
+
+```bash
+cd Akvo_Green
+mkdir -p sites/plant2/config_data
+cp config_data/modbus.csv sites/plant2/config_data/
+cp config_data/Akvo_devices.csv sites/plant2/config_data/devices.csv   # or the site's own sensor list
+# system.csv: gateway_id AKVO_Plant2 · aws.csv: client_id AKVO_Plant2, topics VENKO/plant2/data, VENKO/plant2/system
+#   (copy them from sites/akvo/config_data/ and change those values)
+cd gateway && python3 config_manager.py build --config-dir ../sites/plant2/config_data
+```
+
+`--config-dir` makes `build`/`export` use that folder; without it they use `config_data/` as always.
+
+**2. Certificate, restricted policy and thing** (AWS IoT). The private key is only available at creation time; it goes into `sites/plant2/certs/` (git-ignored) and onto the Pi, nowhere else.
+
+```bash
+KEY=plant2; CLIENT=AKVO_Plant2; ACCT=884520769610
+mkdir -p ../sites/$KEY/certs && cd ../sites/$KEY/certs && umask 077
+aws iot create-keys-and-certificate --set-as-active \
+  --certificate-pem-outfile certificate.pem.crt --private-key-outfile private.pem.key \
+  --query certificateArn --output text > cert.arn
+cp ../../../gateway/certs/AmazonRootCA1.pem .
+cat > policy.json <<EOF
+{ "Version": "2012-10-17", "Statement": [
+  { "Effect": "Allow", "Action": "iot:Connect", "Resource": "arn:aws:iot:us-east-1:$ACCT:client/$CLIENT" },
+  { "Effect": "Allow", "Action": "iot:Publish", "Resource": "arn:aws:iot:us-east-1:$ACCT:topic/VENKO/$KEY/*" } ] }
+EOF
+aws iot create-policy --policy-name venko-$KEY-gateway --policy-document file://policy.json
+aws iot attach-policy --policy-name venko-$KEY-gateway --target "$(cat cert.arn)"
+aws iot create-thing --thing-name $CLIENT
+aws iot attach-thing-principal --thing-name $CLIENT --principal "$(cat cert.arn)"
+```
+
+With this policy the Pi can only connect as its own client id and only publish to its own topics; a wrong `aws.csv` shows up as a connection error in the gateway log instead of data landing in another site.
+
+**3. AWS stack** (VenkoDemo). Add a section to `infra/samconfig.toml` (copy `[akvo.*]` and change the key), then:
+
+```bash
+cd infra
+sam build --template template.yaml
+sam deploy --config-env plant2
+```
+
+**4. Dashboard labels and publish.** Create `config/sites/plant2.json` (copy `config/sites/akvo.json`: title, units, one entry per `DEVICE_ID.SensorName`), then:
+
+```bash
+bash tools/deploy_web.sh venko-plant2 ../Akvo_Green/sites/plant2/config_data/config.json config/sites/plant2.json
+```
+
+A brand-new CloudFront URL can return 403 for a few minutes until it has propagated.
+
+**5. Lock CORS** to the new `DashboardUrl`: set `AllowedOrigin` in the `[plant2.deploy.parameters]` section, then
+
+```bash
+sam deploy --config-env plant2
+API_ID=$(aws cloudformation describe-stack-resource --stack-name venko-plant2 \
+  --logical-resource-id Api --query StackResourceDetail.PhysicalResourceId --output text)
+aws apigateway create-deployment --rest-api-id "$API_ID" --stage-name prod
+```
+
+**6. Install the Pi** (Raspberry Pi OS, network + SSH working, RS-485 adapter on `/dev/ttyUSB0`). From the dev machine:
+
+```bash
+cd Akvo_Green
+tools/push_site.sh plant2 pi@<pi-address> --certs      # code + config.json + certs
+ssh pi@<pi-address> 'cd Akvo_Green && ./install.sh --skip-certs && sudo systemctl start akvo-green'
+```
+
+`push_site.sh` syncs the code without touching the Pi's `config_data/`, `data/`, `logs/`, `.venv/` or certs, copies the site's `config.json`, and (with `--certs`) its certificates. `install.sh` sets up packages, the venv, serial-port access and the `akvo-green` service; it only needs to run once per Pi.
+
+**7. Check** (within ~1 minute of the service starting):
+
+```bash
+aws s3 cp s3://venko-plant2-884520769610-us-east-1/latest/data.json - | head -c 300; echo
+```
+
+Then open the dashboard: **Gateway en línea**, dials filling in. If nothing arrives: `journalctl -u akvo-green -f` on the Pi (a policy refusal shows as a connection error), the certificate is ACTIVE, and `aws.csv`'s client id/topics match the policy and the stack.
+
+### Day to day with several sites
+
+| Task | Site 1 | Another site (`<key>`) |
+|---|---|---|
+| Sensor/label change | edit `Akvo_Green/config_data/*.csv` → `build` | edit `sites/<key>/config_data/*.csv` → `build --config-dir ../sites/<key>/config_data` |
+| Send config/code to the Pi | `tools/push_site.sh root pi@<pi1>` | `tools/push_site.sh <key> pi@<pi>` |
+| Dashboard config | `bash tools/deploy_web.sh` | `bash tools/deploy_web.sh venko-<key> <its config.json> config/sites/<key>.json` |
+| Stack/template change | `sam deploy` | `sam deploy --config-env <key>` |
+| Dashboard code change (`web/`) | run `deploy_web.sh` for **every** site | |
+| Disable a lost Pi | `aws iot update-certificate --certificate-id <id> --new-status INACTIVE` | same, with that Pi's certificate id |
+
+### Removing a site
+
+```bash
+aws s3 rm s3://venko-<key>-web-<account> --recursive
+sam delete --stack-name venko-<key>          # the data bucket is retained (DeletionPolicy: Retain)
+```
+
+Then detach and delete the IoT policy, thing and certificate if the Pi is gone for good, and delete the `[<key>.*]` samconfig section. Empty and delete the data bucket only if its history is no longer needed.
 
 ---
 
