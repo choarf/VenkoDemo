@@ -26,6 +26,9 @@ cd infra && sam build --template template.yaml && sam deploy [--config-env <key>
 # publish dashboard config + web/ to a site
 tools/deploy_web.sh [stack] [gateway-config.json] [overrides.json]
 
+# per-site summary page (AWS resources, URLs, IoT, live status) -> docs/sites/<key>.md
+python3 tools/site_summary.py <samconfig-env> [--pi user@host]
+
 # preview dashboard config built from the gateway config
 python3 tools/sync_config.py --out build/config.json
 ```
