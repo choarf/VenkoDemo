@@ -357,6 +357,7 @@ Stack sam-app                              Stack venko-akvo
 | Dashboard | https://ddlxtxblzvu22.cloudfront.net | https://dsm04m3n65m8j.cloudfront.net | https://d29127v2virrqh.cloudfront.net |
 | Gateway on a Pi | yes - publishing | **no data received yet** (`latest/` empty, checked 2026-10-05) | yes - Pi `192.168.68.129`, publishing |
 | `modbus.csv` `simulate_enabled` | `0` - real sensors | `0` - real sensors | **`1` - SIMULATED data** (every payload tagged `"simulated": true`) |
+| Local dashboard on the Pi (`web_enabled`) | off | off | http://192.168.68.129:8080 |
 
 ### Naming convention
 
@@ -505,6 +506,12 @@ python3 tools/site_summary.py default                          # site 1 (stack s
 - Each run also rebuilds [`docs/sites/README.md`](docs/sites/README.md): every site side by side (client id, topics, Pi, Modbus mode, status, web page, S3 data/web buckets, stack), taken from the site pages - no extra AWS calls.
 - Example: [`docs/sites/cmd4.md`](docs/sites/cmd4.md).
 
+### Local dashboard on each Pi
+
+Besides the cloud dashboard, each Pi can serve a small read-only page over its own local SQLite history at `http://<pi-address>:8080`: live values, trends, alarm events, CSV export and host health. It needs **no internet and no AWS**, so it's the way to look at a site when the cloud can't - e.g. during a network outage, or on a site with no uplink. No password: anyone on the Pi's network can view it.
+
+It lives entirely in Akvo_Green (`gateway/history_web.py`, service `akvo-history-web`) - nothing in this repo or AWS changes. Turn it on per site with `web_enabled=1` / `web_port=8080` in that site's `system.csv` (`database_enabled=1` must already be on), rebuild, `tools/push_site.sh <key> pi@<pi>`, and the first time on each Pi run `./install.sh --skip-certs` there. Full steps: Akvo_Green `sites/README.md`; reference: `docs/edge_node_config/CONFIGURATION.md`, "Local web dashboard". Running now on `cmd4` only.
+
 ### Day to day with several sites
 
 | Task | Site 1 | Another site (`<key>`) |
@@ -516,6 +523,7 @@ python3 tools/site_summary.py default                          # site 1 (stack s
 | Dashboard code change (`web/`) | run `deploy_web.sh` for **every** site | |
 | Disable a lost Pi | `aws iot update-certificate --certificate-id <id> --new-status INACTIVE` | same, with that Pi's certificate id |
 | Site summary (after any change) | `python3 tools/site_summary.py default` | `python3 tools/site_summary.py <key>` |
+| Local dashboard on the Pi | `web_enabled=1` in `config_data/system.csv` → `build` → `push_site.sh root` | same in `sites/<key>/config_data/system.csv` → `push_site.sh <key>` (first time: `./install.sh --skip-certs` on the Pi) |
 
 ### Removing a site
 
