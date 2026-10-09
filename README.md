@@ -482,7 +482,7 @@ tools/push_site.sh cmd4 pi@<pi-address> --certs      # code + config.json + cert
 ssh pi@<pi-address> 'cd Akvo_Green && ./install.sh --skip-certs && sudo systemctl start akvo-green'
 ```
 
-- **Status: done** - Pi `192.168.68.129`, user `pi`, service `akvo-green` enabled and running. `push_site.sh` syncs the code without touching the Pi's `config_data/`, `data/`, `logs/`, `.venv/` or certs, copies the site's `config.json`, and (with `--certs`) its certificates. `install.sh` sets up packages, the venv, serial-port access and the `akvo-green` service; it only needs to run once per Pi.
+- **Status: done** - Pi `192.168.68.129`, user `pi`, service `akvo-green` enabled and running. `push_site.sh` syncs the code without touching the Pi's `config_data/`, `data/`, `logs/`, `.venv/` or certs, copies the site's `config.json`, and (with `--certs`) its certificates. It also installs the AKVO Modbus Tool desktop app (`akvo-modbus`, from `../Tools/AkvoModbus`) when it changed; `--no-modbus-tool` skips it. `install.sh` sets up packages, the venv, serial-port access and the `akvo-green` service; it only needs to run once per Pi.
 
 **7. Check** (within ~1 minute of the service starting):
 
