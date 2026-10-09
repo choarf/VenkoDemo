@@ -10,9 +10,7 @@ Secrets are never written: the API key appears only as its id (with the command
 that reveals it), certificates only as their id/status and file locations.
 
   python3 tools/site_summary.py cmd4 --pi pi@192.168.68.129
-  python3 tools/site_summary.py default        # site 1 (stack sam-app)
-
-<key> is the samconfig.toml env (`default` = site 1). --pi is remembered from the
+<key> is the samconfig.toml env. --pi is remembered from the
 previous summary when omitted.
 """
 import argparse
@@ -53,9 +51,6 @@ def samconfig_env(key: str) -> dict:
 
 
 def site_paths(key: str) -> dict:
-    if key == "default":
-        return {"config_dir": AKVO_GREEN / "config_data", "certs": AKVO_GREEN / "gateway" / "certs",
-                "overrides": ROOT / "config" / "dashboard_overrides.json", "push": "root"}
     return {"config_dir": AKVO_GREEN / "sites" / key / "config_data", "certs": AKVO_GREEN / "sites" / key / "certs",
             "overrides": ROOT / "config" / "sites" / f"{key}.json", "push": key}
 
@@ -282,10 +277,10 @@ def glance(page: str) -> dict:
 def write_index(out_dir: Path) -> Path:
     """docs/sites/README.md: every site side by side, built from the site pages
     already generated (no AWS calls), so it always matches them."""
-    pages = sorted(out_dir.glob("*.md"), key=lambda f: (f.stem != "default", f.stem))
+    pages = sorted(out_dir.glob("*.md"), key=lambda f: f.stem)
     rows = [(f.stem, glance(f.read_text()), f.read_text()) for f in pages if f.name != "README.md"]
     when = lambda page: (re.search(r"on (\d{4}-\d\d-\d\d \d\d:\d\d) UTC", page) or [None, "?"])[1]
-    name = lambda k: "site 1 (`default`)" if k == "default" else f"`{k}`"
+    name = lambda k: f"`{k}`"
     pi = lambda v: v if v.startswith("`") and "unknown" not in v else "unknown"
     mode = lambda v: "**simulated**" if "SIMULATED" in v else "real sensors" if "real" in v else "unknown (no data yet)"
     status = lambda v: v.split(" - ")[0]
@@ -308,7 +303,7 @@ def write_index(out_dir: Path) -> Path:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("key", help="samconfig.toml env of the site (default = site 1)")
+    ap.add_argument("key", help="samconfig.toml env of the site")
     ap.add_argument("--pi", help="SSH target of the site's Pi, e.g. pi@192.168.68.129")
     ap.add_argument("--out", type=Path, help="output file (default docs/sites/<key>.md)")
     args = ap.parse_args()

@@ -4,9 +4,9 @@ End-to-end demo built on the **Akvo Green** edge gateway:
 
 ```
 Raspberry Pi (Akvo_Green, unchanged) ──MQTT/mTLS──▶ AWS IoT Core
-   IoT Rule  AKVO/data   ─▶ Firehose ─▶ S3 raw/data/dt=YYYY-MM-DD/   (history, Athena)
+   IoT Rule  <data topic>   ─▶ Firehose ─▶ S3 raw/data/dt=YYYY-MM-DD/   (history, Athena)
                          └▶ S3 latest/data.json                      (live view)
-   IoT Rule  AKVO/system ─▶ Firehose ─▶ S3 raw/system/…  + latest/system.json
+   IoT Rule  <system topic> ─▶ Firehose ─▶ S3 raw/system/…  + latest/system.json
 API Gateway + Lambda (Python) ◀── Web dashboard (Highcharts, S3 + CloudFront)
 DynamoDB: test events + operator comments
 EventBridge (Mon 06:00 local) ─▶ report Lambda ─▶ S3 reports/weekly/<YYYY-Www>/
@@ -34,8 +34,7 @@ backend/api/                   Lambda handlers (router.py = API entry, reports.p
 backend/common/                Athena, S3, DynamoDB helpers, SQL builders, report builder (HTML + XLSX)
 backend/templates/             report.html.j2
 backend/tests/                 pytest unit tests (no AWS needed)
-config/dashboard_overrides.json  display labels, units, groups, warn margin per sensor (site 1)
-config/sites/<key>.json        the same, for each additional site (see Adding a site)
+config/sites/<key>.json        display labels, units, groups, warn margin per sensor, one file per site (see Adding a site)
 tools/sync_config.py           Akvo_Green config.json → dashboard config (uploads to S3)
 tools/deploy_web.sh            uploads the dashboard config + app-config.js and publishes web/ to S3/CloudFront
 tools/mock_api.py              local UI server with SYNTHETIC data (development only)
@@ -48,12 +47,12 @@ web/                           dashboard (index.html, css/, js/)
 
 Each site has two buckets (names per site in [Adding a site](#adding-a-site-another-pi--its-own-aws-stack-and-dashboard)); every site uses the same layout.
 
-### Data bucket (`venko-demo-<account>-<region>` for site 1)
+### Data bucket (`venko-<key>-<account>-<region>`)
 
 | Prefix | Written by | Contents |
 |---|---|---|
-| `raw/data/dt=YYYY-MM-DD/` | IoT rule -> Firehose | Every `AKVO/data` message, one JSON line per message, tagged with `gw` (MQTT client id) and `rx_ms` (receive time) - the Athena `readings_raw` table's source |
-| `raw/system/dt=YYYY-MM-DD/` | IoT rule -> Firehose | Every `AKVO/system` message, same tagging - the `system_raw` table's source |
+| `raw/data/dt=YYYY-MM-DD/` | IoT rule -> Firehose | Every data-topic message, one JSON line per message, tagged with `gw` (MQTT client id) and `rx_ms` (receive time) - the Athena `readings_raw` table's source |
+| `raw/system/dt=YYYY-MM-DD/` | IoT rule -> Firehose | Every system-topic message, same tagging - the `system_raw` table's source |
 | `latest/data.json` / `latest/system.json` | IoT rule's direct S3 action | The single most recent message of each, overwritten every time - what **Resumen**'s live dials and the online/offline pill read, without an Athena query |
 | `errors/iot/data/` / `errors/iot/system/` | IoT rule's `ErrorAction` | A message lands here if the Firehose/S3 action rejected it. Empty means no ingestion failures |
 | `athena-results/` | Athena (workgroup `<stack>-wg`) | Raw query result files. Expires after 7 days |
@@ -64,7 +63,7 @@ Each site has two buckets (names per site in [Adding a site](#adding-a-site-anot
 
 `raw/` additionally moves to Infrequent Access after 90 days and is kept forever; reports are kept forever too. See **Data retention** under [Operations & troubleshooting](#operations--troubleshooting) for the full policy.
 
-### Web bucket (`venko-demo-web-884520769610` for site 1)
+### Web bucket (`venko-<key>-web-<account>`)
 
 Just the dashboard's static files: `index.html`, `css/`, `js/`, plus `app-config.js` (that site's API URL and key, written by `tools/deploy_web.sh` - see step 3 under [How to deploy](#how-to-deploy)). The bucket blocks all public access; only that site's CloudFront distribution can read it (`WebBucketPolicy` scopes `s3:GetObject` to its Origin Access Control).
 
@@ -94,7 +93,6 @@ port,baudrate,timeout,parity,stopbits,bytesize,simulate_enabled
   ```
 
 - **Switching a site to real sensors:** set `simulate_enabled=0`, `build --config-dir ../sites/<key>/config_data`, `tools/push_site.sh <key> pi@<pi>`, then `sudo systemctl restart akvo-green` on the Pi (a config reload alone doesn't change the mode). History recorded while simulated stays tagged `"simulated": true` in S3/Athena; reports over that period include it, so start real tests after the switch.
-- Watch out: site 1's `config_data/modbus.csv` uses Windows (CRLF) line endings. Edit it in an editor, not with a blind `sed '…s/$/…/'`, or the new value lands after the hidden `\r` and `build` fails with `invalid literal for int()`.
 
 ## Prerequisites
 
@@ -112,10 +110,10 @@ port,baudrate,timeout,parity,stopbits,bytesize,simulate_enabled
 ```bash
 cd infra
 sam build --template template.yaml
-sam deploy --guided --stack-name sam-app --capabilities CAPABILITY_IAM
+sam deploy --config-env <key>     # needs a [<key>.*] section in samconfig.toml - see Adding a site
 ```
 
-Accept the defaults, or set the parameters:
+Each site sets these in its `samconfig.toml` section (`parameter_overrides`):
 
 | Parameter | Default | Meaning |
 |---|---|---|
@@ -124,8 +122,8 @@ Accept the defaults, or set the parameters:
 | `AllowedOrigin` | `*` | CORS origin; set to the dashboard URL after the first deploy (step 4) |
 | `ReportTimezone` | `America/Mexico_City` | Time zone for weekly report boundaries |
 | `GlueDatabaseName` | `venko_demo` | Athena database name |
-| `WebBucketName` | *(auto-generated)* | Name of the dashboard bucket. This stack uses `venko-demo-web-884520769610` (set in `samconfig.toml`). Changing it creates a new, empty bucket, so rerun `tools/deploy_web.sh` straight after. **Must be different from `DataBucketName`** - see note below |
-| `DataBucketName` | `venko-demo-<account>-<region>` | Name of the data bucket. Leave empty for site 1; every additional site sets its own. **Never change it on a running stack**: the old bucket (and its history) is retained and the stack starts over with an empty one. **Must be different from `WebBucketName`** - see note below |
+| `WebBucketName` | *(auto-generated)* | Name of the dashboard bucket. Sites use `venko-<key>-web-<account>`. Changing it creates a new, empty bucket, so rerun `tools/deploy_web.sh` straight after. **Must be different from `DataBucketName`** - see note below |
+| `DataBucketName` | `venko-demo-<account>-<region>` | Name of the data bucket. Every site sets its own, `venko-<key>-<account>-<region>`. **Never change it on a running stack**: the old bucket (and its history) is retained and the stack starts over with an empty one. **Must be different from `WebBucketName`** - see note below |
 
 `sam deploy` prints the outputs `ApiUrl`, `ApiKeyId`, `DataBucketName`, `WebBucketName` and `DashboardUrl`.
 
@@ -133,10 +131,10 @@ Accept the defaults, or set the parameters:
 
 ### 2. Check that data is arriving
 
-With the gateway running (or by publishing a sample from **AWS IoT → MQTT test client** to `AKVO/data`):
+With the gateway running (or by publishing a sample from **AWS IoT → MQTT test client** to the site's data topic, e.g. `VENKO/<key>/data`):
 
 ```bash
-BUCKET=$(aws cloudformation describe-stacks --stack-name sam-app \
+BUCKET=$(aws cloudformation describe-stacks --stack-name venko-<key> \
   --query "Stacks[0].Outputs[?OutputKey=='DataBucketName'].OutputValue" --output text)
 aws s3 cp s3://$BUCKET/latest/data.json - | head -c 400; echo
 aws s3 ls s3://$BUCKET/raw/data/ --recursive | tail -3     # appears within ~60 s (Firehose buffer)
@@ -144,7 +142,7 @@ aws s3 ls s3://$BUCKET/raw/data/ --recursive | tail -3     # appears within ~60 
 
 If nothing appears, look in `s3://$BUCKET/errors/`, and check that the gateway's IoT policy allows `iot:Publish` on those topics.
 
-Athena check (workgroup `sam-app-wg`, database `venko_demo`):
+Athena check (workgroup `venko-<key>-wg`, database `venko_<key>`):
 
 ```sql
 SELECT from_unixtime(rx_ms/1000) AS t, d.device, s.sensor, r.val, r.status, r.alarm
@@ -158,8 +156,8 @@ ORDER BY rx_ms DESC LIMIT 20;
 ### 3. Publish the sensor config and the dashboard
 
 ```bash
-tools/deploy_web.sh [stack] [gateway-config.json] [overrides.json]
-tools/deploy_web.sh                      # site 1: sam-app, Akvo_Green/config_data/config.json, config/dashboard_overrides.json
+tools/deploy_web.sh <stack> <gateway-config.json> <overrides.json>
+tools/deploy_web.sh venko-cmd4 ../Akvo_Green/sites/cmd4/config_data/config.json config/sites/cmd4.json
 ```
 
 The script:
@@ -173,19 +171,18 @@ Browsers may keep old dashboard files cached after an update; a hard reload (Ctr
 
 ### 4. Lock CORS to the dashboard URL (recommended)
 
+Set `AllowedOrigin=\"https://dxxxxxxxxxxxx.cloudfront.net\"` in the site's `parameter_overrides` in `infra/samconfig.toml` (passing `--parameter-overrides` on the command line replaces the whole list), then:
+
 ```bash
 cd infra
-sam deploy --stack-name sam-app --capabilities CAPABILITY_IAM \
-  --parameter-overrides AllowedOrigin=https://dxxxxxxxxxxxx.cloudfront.net
+sam deploy --config-env <key>
 
 # SAM does not republish the API stage when only a parameter changes, so the
 # CORS preflight keeps the old origin until the stage is redeployed:
-API_ID=$(aws cloudformation describe-stack-resource --stack-name sam-app \
+API_ID=$(aws cloudformation describe-stack-resource --stack-name venko-<key> \
   --logical-resource-id Api --query StackResourceDetail.PhysicalResourceId --output text)
 aws apigateway create-deployment --rest-api-id "$API_ID" --stage-name prod
 ```
-
-Put the same `AllowedOrigin` in `infra/samconfig.toml` (`parameter_overrides`), otherwise a plain `sam deploy` resets it to `*`.
 
 Open `DashboardUrl`. The header pill should show **Gateway en línea**.
 
@@ -219,7 +216,7 @@ In **Históricos**, pick a range (or 1 h / 6 h / 24 h / 7 d), select sensors, th
 Generated automatically every Monday at 06:00 (Mexico City) for the previous ISO week (Mon–Sun), in HTML and Excel. To create one on demand, go to **Reportes**, enter a week (e.g. `2026-W39`, or leave it empty for last week) and click **Generar**. Or run:
 
 ```bash
-aws lambda invoke --function-name sam-app-report \
+aws lambda invoke --function-name venko-<key>-report \
   --cli-binary-format raw-in-base64-out --payload '{"kind":"weekly","week":"2026-W39"}' /dev/stdout
 ```
 
@@ -232,9 +229,9 @@ When Akvo_Green changes (more sensors, a new unit, new limits), the AWS stack do
 ### The config pipeline
 
 ```
-Akvo_Green/config_data/*.csv ──config_manager.py build──▶ Akvo_Green/config_data/config.json ──▶ Pi (gateway)
+Akvo_Green/sites/<key>/config_data/*.csv ──config_manager.py build──▶ …/config_data/config.json ──▶ Pi (gateway)
                                                                       │
-config/dashboard_overrides.json ──────────────────────────────────────┤
+config/sites/<key>.json ──────────────────────────────────────────────┤
                                                                       ▼
                                               tools/sync_config.py ──▶ s3://<data bucket>/config/config.json
                                                                                   (read by the API and reports)
@@ -246,7 +243,7 @@ config/dashboard_overrides.json ────────────────
 | `modbus.csv` | Serial port settings, plus `simulate_enabled` (`0` = read the real sensors, `1` = synthetic demo data - see [No hardware yet?](#no-hardware-yet-demo-with-virtual-modbus)) |
 | `system.csv` | `gateway_id`, time zone, poll/system intervals, watchdog |
 | `aws.csv` | IoT endpoint, MQTT `client_id`, cert paths, topics |
-| `config/dashboard_overrides.json` | Display only: site title, unit display names, per-sensor label/group/decimals |
+| `config/sites/<key>.json` | Display only: site title, unit display names, per-sensor label/group/decimals |
 
 `Akvo_devices.csv` / `Osmosis_devices.csv` are saved sensor sets and are **not** read by the build. To switch sets, copy one over `devices.csv` and rebuild. The `aws` and `modbus` sections are never uploaded to S3.
 
@@ -256,20 +253,21 @@ config/dashboard_overrides.json ────────────────
 
 ```bash
 cd ~/git_reps/claude/projects/Venko/Akvo_Green/gateway
-# edit ../config_data/devices.csv
-python3 config_manager.py build --dry-run   # validate and print
-python3 config_manager.py build             # writes config_data/config.json
+# edit ../sites/<key>/config_data/devices.csv
+python3 config_manager.py build --config-dir ../sites/<key>/config_data --dry-run   # validate and print
+python3 config_manager.py build --config-dir ../sites/<key>/config_data             # writes its config.json
 ```
 
-**2. Copy the new `config.json` to the Pi's `config_data/`** (e.g. with `scp`). The gateway reloads it within 5 s without a restart.
+**2. Send the new `config.json` to the Pi:** `tools/push_site.sh <key> pi@<pi>` (from Akvo_Green). The gateway reloads it within 5 s without a restart.
 
 **3. Update the dashboard labels and publish the dashboard config:**
 
 ```bash
 cd ~/git_reps/claude/projects/Venko/VenkoDemo
-# edit config/dashboard_overrides.json (only if labels/units/groups changed)
-python3 tools/sync_config.py --out build/config.json   # preview
-python3 tools/sync_config.py --bucket venko-demo-884520769610-us-east-1
+# edit config/sites/<key>.json (only if labels/units/groups changed)
+SRC="--source ../Akvo_Green/sites/<key>/config_data/config.json --overrides config/sites/<key>.json"
+python3 tools/sync_config.py $SRC --out build/config.json   # preview
+python3 tools/sync_config.py $SRC --bucket venko-<key>-884520769610-us-east-1
 ```
 
 - The API and reports cache the config for up to **5 minutes**. Reload the dashboard after that.
@@ -285,7 +283,7 @@ device_id,slave,sensor_name,addr,count,scale,offset,unit,type,min,max,enabled
 DEV_6,4,Caudal,0,1,1,0,L/min,float,0,200,1
 ```
 
-and its entry in `dashboard_overrides.json`:
+and its entry in `config/sites/<key>.json`:
 
 ```json
 "DEV_6.Caudal": { "label": "Caudal", "group": "Flujo", "decimals": 1 }
@@ -312,12 +310,12 @@ DEV_2,3,TempAgua,0,1,0.1,0,Celsius,float,0,50,1
 
 **MQTT topics** (`topic_pub`/`topic_system` in `aws.csv`) are the one change that needs `sam deploy`:
 
+Change `DataTopic`/`SystemTopic` in the site's `parameter_overrides` in `infra/samconfig.toml`, then:
+
 ```bash
 cd infra
-sam deploy --parameter-overrides DataTopic=NEW/data SystemTopic=NEW/system
+sam deploy --config-env <key>
 ```
-
-Also update the topics in `infra/samconfig.toml`, or the next plain `sam deploy` puts the old ones back.
 
 ### Check afterwards
 
@@ -333,31 +331,31 @@ Also update the topics in `infra/samconfig.toml`, or the next plain `sam deploy`
 Each site is self-contained: **one Raspberry Pi, one AWS stack, one dashboard**. Sites share the AWS account, the IoT endpoint and the code (one Akvo_Green repo, one VenkoDemo repo); they share no data, buckets, API keys or URLs.
 
 ```
-Site 1 (existing)                          Site "cmd4"
-Pi 1  client AKVO_Gateway                  Pi 2  client AKVO_cmd4
-      topics AKVO/data, AKVO/system              topics VENKO/cmd4/data, VENKO/cmd4/system
-Stack sam-app                              Stack venko-cmd4
-      data  venko-demo-884520769610-…            data  venko-cmd4-884520769610-us-east-1
-      web   https://ddlxtxblzvu22…               web   https://d29127v2virrqh.cloudfront.net
+Site "cmd4"                                Site "<key>"
+Pi    client AKVO_cmd4                     Pi    client AKVO_<Key>
+      topics VENKO/cmd4/data, …/system           topics VENKO/<key>/data, …/system
+Stack venko-cmd4                           Stack venko-<key>
+      data  venko-cmd4-884520769610-…            data  venko-<key>-<account>-<region>
+      web   https://d29127v2virrqh…              web   its own CloudFront URL
 ```
 
 ### Sites in this account
 
-| | Site 1 | cmd4 |
-|---|---|---|
-| Gateway config | `Akvo_Green/config_data/` | `Akvo_Green/sites/cmd4/config_data/` |
-| Certificates | `Akvo_Green/gateway/certs/` | `Akvo_Green/sites/cmd4/certs/` (git-ignored) |
-| MQTT client / gateway id | `AKVO_Gateway` | `AKVO_cmd4` |
-| Topics | `AKVO/data`, `AKVO/system` | `VENKO/cmd4/data`, `VENKO/cmd4/system` |
-| IoT policy | `AllIoTAcessPolicy` (allows everything) | `venko-cmd4-gateway` (only its client id + `VENKO/cmd4/*`) |
-| Stack / samconfig env | `sam-app` / `default` | `venko-cmd4` / `cmd4` |
-| Data bucket | `venko-demo-884520769610-us-east-1` | `venko-cmd4-884520769610-us-east-1` |
-| Athena DB / workgroup | `venko_demo` / `sam-app-wg` | `venko_cmd4` / `venko-cmd4-wg` |
-| Dashboard labels | `config/dashboard_overrides.json` | `config/sites/cmd4.json` |
-| Dashboard | https://ddlxtxblzvu22.cloudfront.net | https://d29127v2virrqh.cloudfront.net |
-| Gateway on a Pi | yes - publishing | yes - Pi `192.168.68.129`, publishing |
-| `modbus.csv` `simulate_enabled` | `0` - real sensors | **`1` - SIMULATED data** (every payload tagged `"simulated": true`) |
-| Local dashboard on the Pi (`web_enabled`) | off | http://192.168.68.129:8080 |
+| | cmd4 |
+|---|---|
+| Gateway config | `Akvo_Green/sites/cmd4/config_data/` |
+| Certificates | `Akvo_Green/sites/cmd4/certs/` (git-ignored) |
+| MQTT client / gateway id | `AKVO_cmd4` |
+| Topics | `VENKO/cmd4/data`, `VENKO/cmd4/system` |
+| IoT policy | `venko-cmd4-gateway` (only its client id + `VENKO/cmd4/*`) |
+| Stack / samconfig env | `venko-cmd4` / `cmd4` |
+| Data bucket | `venko-cmd4-884520769610-us-east-1` |
+| Athena DB / workgroup | `venko_cmd4` / `venko-cmd4-wg` |
+| Dashboard labels | `config/sites/cmd4.json` |
+| Dashboard | https://d29127v2virrqh.cloudfront.net |
+| Gateway on a Pi | yes - Pi `192.168.68.129`, publishing |
+| `modbus.csv` `simulate_enabled` | **`1` - SIMULATED data** (every payload tagged `"simulated": true`) |
+| Local dashboard on the Pi (`web_enabled`) | http://192.168.68.129:8080 |
 
 ### Naming convention
 
@@ -388,9 +386,9 @@ cp config_data/Akvo_devices.csv sites/cmd4/config_data/devices.csv
 cd gateway && python3 config_manager.py build --config-dir ../sites/cmd4/config_data
 ```
 
-- **Parameters used:** site key `cmd4`; sensor set `Akvo_devices.csv` reused as-is (the same 15 sensors site 1 uses - `Pt100Sensor`, `Ambient`, `Humedad`, `ORPSensor`, `PhSensor`, `TempPhSensor`, `DOSensor`, `CODSensor`, `TempCODSensor`, `TurbCODSensort`, `BODSensor`, `TOCSensor`, `CondSensor`, `TempCondSensor`, `TDSCondSensor`); `gateway_id`/`client_id` = `AKVO_cmd4`; topics = `VENKO/cmd4/data` / `VENKO/cmd4/system`.
+- **Parameters used:** site key `cmd4`; sensor set `Akvo_devices.csv` reused as-is (15 sensors - `Pt100Sensor`, `Ambient`, `Humedad`, `ORPSensor`, `PhSensor`, `TempPhSensor`, `DOSensor`, `CODSensor`, `TempCODSensor`, `TurbCODSensort`, `BODSensor`, `TOCSensor`, `CondSensor`, `TempCondSensor`, `TDSCondSensor`); `gateway_id`/`client_id` = `AKVO_cmd4`; topics = `VENKO/cmd4/data` / `VENKO/cmd4/system`.
 - **Pitfall hit:** the four CSVs were first copied into `sites/cmd4/` directly instead of `sites/cmd4/config_data/` - `build --config-dir ../sites/cmd4/config_data` then fails with `FileNotFoundError: .../sites/cmd4/config_data/devices.csv` because that folder was empty. Fix: `mv sites/cmd4/{devices,modbus,system,aws}.csv sites/cmd4/config_data/`.
-- **Outcome:** `sites/cmd4/config_data/config.json` built - `Loaded 15 devices`, `Validation successful` (with the same duplicate-slave-ID *warnings* site 1 also gets, since several sensors share one physical Modbus unit - harmless).
+- **Outcome:** `sites/cmd4/config_data/config.json` built - `Loaded 15 devices`, `Validation successful` (with duplicate-slave-ID *warnings*, since several sensors share one physical Modbus unit - harmless).
 
 **2. Certificate, restricted policy and thing** (AWS IoT). The private key is only available at creation time; it goes into `sites/cmd4/certs/` (git-ignored) and onto the Pi, nowhere else.
 
@@ -453,7 +451,7 @@ sam deploy --config-env cmd4
     ```
 - **Outcome:** stack `venko-cmd4` → `CREATE_COMPLETE`. Outputs: `ApiUrl=https://4f9o3ozqu2.execute-api.us-east-1.amazonaws.com/prod`, `ApiKeyId=6wrs4s8nh3`, `DataBucketName=venko-cmd4-884520769610-us-east-1`, `WebBucketName=venko-cmd4-web-884520769610`, `DashboardUrl=https://d29127v2virrqh.cloudfront.net`.
 
-**4. Dashboard labels and publish.** `cmd4` uses the exact same 15 sensors as site 1 (`config/sites/cmd4.json` only differs in `site.title`) - for a site with a different sensor set, edit the `sensors`/`groups`/`units` too, one entry per `DEVICE_ID.SensorName`. Then:
+**4. Dashboard labels and publish.** Write `config/sites/cmd4.json` (start from another site's file) - for a site with a different sensor set, edit the `sensors`/`groups`/`units` too, one entry per `DEVICE_ID.SensorName`. Then:
 
 ```bash
 bash tools/deploy_web.sh venko-cmd4 ../Akvo_Green/sites/cmd4/config_data/config.json config/sites/cmd4.json
@@ -496,7 +494,6 @@ aws s3 cp s3://venko-cmd4-884520769610-us-east-1/latest/data.json - | head -c 30
 
 ```bash
 python3 tools/site_summary.py cmd4 --pi pi@192.168.68.129     # → docs/sites/cmd4.md
-python3 tools/site_summary.py default                          # site 1 (stack sam-app)
 ```
 
 - `<key>` is the `samconfig.toml` env. It reads the stack from AWS and the site's files in Akvo_Green, so run it after steps 1-7.
@@ -514,16 +511,16 @@ It lives entirely in Akvo_Green (`gateway/history_web.py`, service `akvo-history
 
 ### Day to day with several sites
 
-| Task | Site 1 | Another site (`<key>`) |
-|---|---|---|
-| Sensor/label change | edit `Akvo_Green/config_data/*.csv` → `build` | edit `sites/<key>/config_data/*.csv` → `build --config-dir ../sites/<key>/config_data` |
-| Send config/code to the Pi | `tools/push_site.sh root pi@<pi1>` | `tools/push_site.sh <key> pi@<pi>` |
-| Dashboard config | `bash tools/deploy_web.sh` | `bash tools/deploy_web.sh venko-<key> <its config.json> config/sites/<key>.json` |
-| Stack/template change | `sam deploy` | `sam deploy --config-env <key>` |
-| Dashboard code change (`web/`) | run `deploy_web.sh` for **every** site | |
-| Disable a lost Pi | `aws iot update-certificate --certificate-id <id> --new-status INACTIVE` | same, with that Pi's certificate id |
-| Site summary (after any change) | `python3 tools/site_summary.py default` | `python3 tools/site_summary.py <key>` |
-| Local dashboard on the Pi | `web_enabled=1` in `config_data/system.csv` → `build` → `push_site.sh root` | same in `sites/<key>/config_data/system.csv` → `push_site.sh <key>` (first time: `./install.sh --skip-certs` on the Pi) |
+| Task | Command (site `<key>`) |
+|---|---|
+| Sensor/label change | edit `sites/<key>/config_data/*.csv` → `build --config-dir ../sites/<key>/config_data` |
+| Send config/code to the Pi | `tools/push_site.sh <key> pi@<pi>` |
+| Dashboard config | `bash tools/deploy_web.sh venko-<key> <its config.json> config/sites/<key>.json` |
+| Stack/template change | `sam deploy --config-env <key>` |
+| Dashboard code change (`web/`) | run `deploy_web.sh` for **every** site |
+| Disable a lost Pi | `aws iot update-certificate --certificate-id <id> --new-status INACTIVE` |
+| Site summary (after any change) | `python3 tools/site_summary.py <key>` |
+| Local dashboard on the Pi | `web_enabled=1` in `sites/<key>/config_data/system.csv` → `build` → `push_site.sh <key>` (first time: `./install.sh --skip-certs` on the Pi) |
 
 ### Removing a site
 
@@ -634,8 +631,8 @@ All routes require the header `X-Api-Key`. Times are epoch ms or ISO-8601.
 | Dashboard shows "No se pudo cargar la configuración" | `web/app-config.js` values; `config/config.json` missing → run `sync_config.py` |
 | Pill says *Gateway sin datos* | Gateway running and connected? `latest/data.json` timestamp; `errors/iot/` in the bucket |
 | History empty but live works | Firehose buffers ~60 s; check `raw/data/dt=…/` exists; `PartitionStartDate` not after your data |
-| History/alarms error "query failed" | Athena console → workgroup `sam-app-wg` → recent queries for the message |
-| Report stuck on *Generando reporte…* | CloudWatch logs of `sam-app-report`; use **Reintentar** |
+| History/alarms error "query failed" | Athena console → workgroup `venko-<key>-wg` → recent queries for the message |
+| Report stuck on *Generando reporte…* | CloudWatch logs of `venko-<key>-report`; use **Reintentar** |
 | CORS error in browser console | `AllowedOrigin` must equal the exact dashboard origin |
 | `sam deploy` fails with `Failed to create changeset ... AWS::EarlyValidation::ResourceExistenceCheck` before the confirmation prompt | `WebBucketName` and `DataBucketName` were given the same value - they must be two distinct bucket names (or left blank for the defaults) |
 | `sam build --template <key>.yaml` says `Template file not found` | There is only one template, `template.yaml`, shared by every site - only `samconfig.toml`'s per-env section differs |
@@ -650,4 +647,4 @@ All routes require the header `X-Api-Key`. Times are epoch ms or ISO-8601.
 - The API key is visible to anyone who can load the page. It only gates and throttles casual access. For a public demo, add Cognito login or CloudFront access restrictions.
 - Highcharts requires a commercial license for commercial use.
 
-**Remove everything:** empty the web bucket, then `sam delete --stack-name sam-app`. The data bucket (`venko-demo-<account>-<region>`) has `DeletionPolicy: Retain`, so the stack delete leaves it and its sensor history in place. Empty and delete it by hand only if you really want the data gone.
+**Remove a site's stack:** see [Removing a site](#removing-a-site). The data bucket (`venko-<key>-<account>-<region>`) has `DeletionPolicy: Retain`, so the stack delete leaves it and its sensor history in place. Empty and delete it by hand only if you really want the data gone.

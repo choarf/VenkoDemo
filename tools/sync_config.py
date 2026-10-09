@@ -3,11 +3,12 @@
 
 Keeps only what the dashboard/reports need (gateway timing + sensors with
 units and min/max) - the aws/modbus sections (cert paths, endpoint, serial
-port) are never uploaded - and merges config/dashboard_overrides.json for
-labels, unit display names and grouping.
+port) are never uploaded - and merges the site's config/sites/<key>.json for
+labels, unit display names and grouping. Defaults to site cmd4's files.
 
-  python3 tools/sync_config.py --source ../Akvo_Green/config_data/config.json --out build/config.json
-  python3 tools/sync_config.py --bucket venko-demo-<acct>-<region>        # upload to s3://.../config/config.json
+  python3 tools/sync_config.py --source ../Akvo_Green/sites/<key>/config_data/config.json \
+      --overrides config/sites/<key>.json --out build/config.json
+  python3 tools/sync_config.py --source … --overrides … --bucket venko-<key>-<acct>-<region>   # upload to s3://.../config/config.json
 """
 import argparse
 import hashlib
@@ -17,8 +18,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_SOURCE = Path("/home/chris/git_reps/claude/projects/Venko/Akvo_Green/config_data/config.json")
-DEFAULT_OVERRIDES = ROOT / "config" / "dashboard_overrides.json"
+DEFAULT_SOURCE = ROOT.parent / "Akvo_Green" / "sites" / "cmd4" / "config_data" / "config.json"
+DEFAULT_OVERRIDES = ROOT / "config" / "sites" / "cmd4.json"
 S3_KEY = "config/config.json"
 
 

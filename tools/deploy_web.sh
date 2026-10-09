@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # Publish the dashboard: uploads the sensor config, writes app-config.js from the
 # stack outputs and syncs web/ to the web bucket.
-#   tools/deploy_web.sh [stack-name] [gateway-config.json] [overrides.json]
-# Defaults: sam-app, Akvo_Green's config_data/config.json, config/dashboard_overrides.json
+#   tools/deploy_web.sh <stack-name> <gateway-config.json> <overrides.json>
+#   e.g. tools/deploy_web.sh venko-cmd4 ../Akvo_Green/sites/cmd4/config_data/config.json config/sites/cmd4.json
 # Refuses to publish when the gateway config's MQTT topics differ from the stack's.
 set -euo pipefail
-STACK="${1:-sam-app}"
+if [ $# -ne 3 ]; then
+  echo "usage: $0 <stack-name> <gateway-config.json> <overrides.json>" >&2
+  exit 2
+fi
+STACK="$1"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SRC_ARGS=()
-[ -n "${2:-}" ] && SRC_ARGS+=(--source "$2")
-[ -n "${3:-}" ] && SRC_ARGS+=(--overrides "$3")
+SRC_ARGS=(--source "$2" --overrides "$3")
 
 out() {
   aws cloudformation describe-stacks --stack-name "$STACK" \

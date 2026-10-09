@@ -20,16 +20,16 @@ cd backend && python -m pytest -q tests/test_router.py::test_conflict_maps_to_40
 # dashboard against a mock API with SYNTHETIC data (UI work only; no Excel/CSV export)
 python3 tools/mock_api.py            # http://localhost:8787
 
-# deploy stack (site 1 = stack sam-app, samconfig env "default"; other sites use --config-env <key>)
-cd infra && sam build --template template.yaml && sam deploy [--config-env <key>]
+# deploy stack (each site = stack venko-<key>, samconfig env <key>)
+cd infra && sam build --template template.yaml && sam deploy --config-env <key>
 
 # publish dashboard config + web/ to a site
-tools/deploy_web.sh [stack] [gateway-config.json] [overrides.json]
+tools/deploy_web.sh <stack> <gateway-config.json> <overrides.json>
 
 # per-site summary page (AWS resources, URLs, IoT, live status) -> docs/sites/<key>.md
 python3 tools/site_summary.py <samconfig-env> [--pi user@host]
 
-# preview dashboard config built from the gateway config
+# preview dashboard config built from the gateway config (defaults to site cmd4)
 python3 tools/sync_config.py --out build/config.json
 ```
 
@@ -49,9 +49,9 @@ Python 3.14 (Lambda runtime `python3.14`). There is no `.gitignore`, and `infra/
 - `storage.py` — S3 helpers; `get_config()` caches `config/config.json` per container for 5 min and raises `LookupError` if missing.
 - `settings.py` — all runtime config from Lambda env vars (set in the template's `Globals`); `MAX_RANGE_DAYS = 31` caps Athena scans.
 
-**Sensor config pipeline.** Sensors are not hard-coded anywhere. `tools/sync_config.py` reads the gateway's `config.json` (from `../Akvo_Green`), strips the `aws`/`modbus` sections (cert paths must never be uploaded), merges display overrides (`config/dashboard_overrides.json` for site 1, `config/sites/<key>.json` for others; keys are case-sensitive `DEVICE_ID.SensorName`), and uploads to `s3://<data bucket>/config/config.json`. The API, reports and dashboard all read that. New sensors need no stack redeploy.
+**Sensor config pipeline.** Sensors are not hard-coded anywhere. `tools/sync_config.py` reads the gateway's `config.json` (from `../Akvo_Green`), strips the `aws`/`modbus` sections (cert paths must never be uploaded), merges display overrides (`config/sites/<key>.json`; keys are case-sensitive `DEVICE_ID.SensorName`), and uploads to `s3://<data bucket>/config/config.json`. The API, reports and dashboard all read that. New sensors need no stack redeploy.
 
-**Multi-site.** One Pi = one stack = one dashboard; sites share code and AWS account only. Per-site params live in `infra/samconfig.toml` sections (`[default.*]`, `[cmd4.*]`, …). `deploy_web.sh` refuses to upload if the gateway config's topics don't match the stack's, and writes `app-config.js` (API URL + key) straight to that site's web bucket — never into `web/` — so sites can't overwrite each other. A change to `web/` must be deployed to **every** site. Don't change `DataBucketName` on an existing stack (bucket is `Retain`; a new empty one would be created).
+**Multi-site.** One Pi = one stack = one dashboard; sites share code and AWS account only. Per-site params live in `infra/samconfig.toml` sections (`[cmd4.*]`, …; there is no `[default.*]`, so always pass `--config-env`). `deploy_web.sh` refuses to upload if the gateway config's topics don't match the stack's, and writes `app-config.js` (API URL + key) straight to that site's web bucket — never into `web/` — so sites can't overwrite each other. A change to `web/` must be deployed to **every** site. Don't change `DataBucketName` on an existing stack (bucket is `Retain`; a new empty one would be created).
 
 **Web (`web/`).** `js/main.js` does hash routing between views (`overview`, `test`, `alarms`, `history`, `reports`), polls `/live` + `/tests/active` every 10 s, and dispatches to `js/modules/*.js`. Most views have a same-named module; the `test` view is `hmi.js` (start/stop, comments) using `trend.js` for the live chart, and it receives every live poll via `hmi.onLive`. `api.js` does fetch with `X-Api-Key` from `window.VENKO` in `app-config.js` (generated per site, not in the repo). Charts created in hidden views must be reflowed on show.
 
