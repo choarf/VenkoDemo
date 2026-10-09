@@ -333,35 +333,35 @@ Also update the topics in `infra/samconfig.toml`, or the next plain `sam deploy`
 Each site is self-contained: **one Raspberry Pi, one AWS stack, one dashboard**. Sites share the AWS account, the IoT endpoint and the code (one Akvo_Green repo, one VenkoDemo repo); they share no data, buckets, API keys or URLs.
 
 ```
-Site 1 (existing)                          Site "akvo"
-Pi 1  client AKVO_Gateway                  Pi 2  client AKVO_Akvo
-      topics AKVO/data, AKVO/system              topics VENKO/akvo/data, VENKO/akvo/system
-Stack sam-app                              Stack venko-akvo
-      data  venko-demo-884520769610-…            data  venko-akvo-884520769610-us-east-1
-      web   https://ddlxtxblzvu22…               web   https://dsm04m3n65m8j.cloudfront.net
+Site 1 (existing)                          Site "cmd4"
+Pi 1  client AKVO_Gateway                  Pi 2  client AKVO_cmd4
+      topics AKVO/data, AKVO/system              topics VENKO/cmd4/data, VENKO/cmd4/system
+Stack sam-app                              Stack venko-cmd4
+      data  venko-demo-884520769610-…            data  venko-cmd4-884520769610-us-east-1
+      web   https://ddlxtxblzvu22…               web   https://d29127v2virrqh.cloudfront.net
 ```
 
 ### Sites in this account
 
-| | Site 1 | akvo | cmd4 |
-|---|---|---|---|
-| Gateway config | `Akvo_Green/config_data/` | `Akvo_Green/sites/akvo/config_data/` | `Akvo_Green/sites/cmd4/config_data/` |
-| Certificates | `Akvo_Green/gateway/certs/` | `Akvo_Green/sites/akvo/certs/` (git-ignored) | `Akvo_Green/sites/cmd4/certs/` (git-ignored) |
-| MQTT client / gateway id | `AKVO_Gateway` | `AKVO_Akvo` | `AKVO_cmd4` |
-| Topics | `AKVO/data`, `AKVO/system` | `VENKO/akvo/data`, `VENKO/akvo/system` | `VENKO/cmd4/data`, `VENKO/cmd4/system` |
-| IoT policy | `AllIoTAcessPolicy` (allows everything) | `venko-akvo-gateway` (only its client id + `VENKO/akvo/*`) | `venko-cmd4-gateway` (only its client id + `VENKO/cmd4/*`) |
-| Stack / samconfig env | `sam-app` / `default` | `venko-akvo` / `akvo` | `venko-cmd4` / `cmd4` |
-| Data bucket | `venko-demo-884520769610-us-east-1` | `venko-akvo-884520769610-us-east-1` | `venko-cmd4-884520769610-us-east-1` |
-| Athena DB / workgroup | `venko_demo` / `sam-app-wg` | `venko_akvo` / `venko-akvo-wg` | `venko_cmd4` / `venko-cmd4-wg` |
-| Dashboard labels | `config/dashboard_overrides.json` | `config/sites/akvo.json` | `config/sites/cmd4.json` |
-| Dashboard | https://ddlxtxblzvu22.cloudfront.net | https://dsm04m3n65m8j.cloudfront.net | https://d29127v2virrqh.cloudfront.net |
-| Gateway on a Pi | yes - publishing | **no data received yet** (`latest/` empty, checked 2026-10-05) | yes - Pi `192.168.68.129`, publishing |
-| `modbus.csv` `simulate_enabled` | `0` - real sensors | `0` - real sensors | **`1` - SIMULATED data** (every payload tagged `"simulated": true`) |
-| Local dashboard on the Pi (`web_enabled`) | off | off | http://192.168.68.129:8080 |
+| | Site 1 | cmd4 |
+|---|---|---|
+| Gateway config | `Akvo_Green/config_data/` | `Akvo_Green/sites/cmd4/config_data/` |
+| Certificates | `Akvo_Green/gateway/certs/` | `Akvo_Green/sites/cmd4/certs/` (git-ignored) |
+| MQTT client / gateway id | `AKVO_Gateway` | `AKVO_cmd4` |
+| Topics | `AKVO/data`, `AKVO/system` | `VENKO/cmd4/data`, `VENKO/cmd4/system` |
+| IoT policy | `AllIoTAcessPolicy` (allows everything) | `venko-cmd4-gateway` (only its client id + `VENKO/cmd4/*`) |
+| Stack / samconfig env | `sam-app` / `default` | `venko-cmd4` / `cmd4` |
+| Data bucket | `venko-demo-884520769610-us-east-1` | `venko-cmd4-884520769610-us-east-1` |
+| Athena DB / workgroup | `venko_demo` / `sam-app-wg` | `venko_cmd4` / `venko-cmd4-wg` |
+| Dashboard labels | `config/dashboard_overrides.json` | `config/sites/cmd4.json` |
+| Dashboard | https://ddlxtxblzvu22.cloudfront.net | https://d29127v2virrqh.cloudfront.net |
+| Gateway on a Pi | yes - publishing | yes - Pi `192.168.68.129`, publishing |
+| `modbus.csv` `simulate_enabled` | `0` - real sensors | **`1` - SIMULATED data** (every payload tagged `"simulated": true`) |
+| Local dashboard on the Pi (`web_enabled`) | off | http://192.168.68.129:8080 |
 
 ### Naming convention
 
-Pick a short **site key** (lowercase, e.g. `akvo`) and derive every name from it:
+Pick a short **site key** (lowercase, e.g. `cmd4`) and derive every name from it:
 
 | Item | Value |
 |---|---|
@@ -388,9 +388,9 @@ cp config_data/Akvo_devices.csv sites/cmd4/config_data/devices.csv
 cd gateway && python3 config_manager.py build --config-dir ../sites/cmd4/config_data
 ```
 
-- **Parameters used:** site key `cmd4`; sensor set `Akvo_devices.csv` reused as-is (the same 15 sensors `akvo` uses - `Pt100Sensor`, `Ambient`, `Humedad`, `ORPSensor`, `PhSensor`, `TempPhSensor`, `DOSensor`, `CODSensor`, `TempCODSensor`, `TurbCODSensort`, `BODSensor`, `TOCSensor`, `CondSensor`, `TempCondSensor`, `TDSCondSensor`); `gateway_id`/`client_id` = `AKVO_cmd4`; topics = `VENKO/cmd4/data` / `VENKO/cmd4/system`.
+- **Parameters used:** site key `cmd4`; sensor set `Akvo_devices.csv` reused as-is (the same 15 sensors site 1 uses - `Pt100Sensor`, `Ambient`, `Humedad`, `ORPSensor`, `PhSensor`, `TempPhSensor`, `DOSensor`, `CODSensor`, `TempCODSensor`, `TurbCODSensort`, `BODSensor`, `TOCSensor`, `CondSensor`, `TempCondSensor`, `TDSCondSensor`); `gateway_id`/`client_id` = `AKVO_cmd4`; topics = `VENKO/cmd4/data` / `VENKO/cmd4/system`.
 - **Pitfall hit:** the four CSVs were first copied into `sites/cmd4/` directly instead of `sites/cmd4/config_data/` - `build --config-dir ../sites/cmd4/config_data` then fails with `FileNotFoundError: .../sites/cmd4/config_data/devices.csv` because that folder was empty. Fix: `mv sites/cmd4/{devices,modbus,system,aws}.csv sites/cmd4/config_data/`.
-- **Outcome:** `sites/cmd4/config_data/config.json` built - `Loaded 15 devices`, `Validation successful` (with the same duplicate-slave-ID *warnings* `akvo`/site 1 also get, since several sensors share one physical Modbus unit - harmless).
+- **Outcome:** `sites/cmd4/config_data/config.json` built - `Loaded 15 devices`, `Validation successful` (with the same duplicate-slave-ID *warnings* site 1 also gets, since several sensors share one physical Modbus unit - harmless).
 
 **2. Certificate, restricted policy and thing** (AWS IoT). The private key is only available at creation time; it goes into `sites/cmd4/certs/` (git-ignored) and onto the Pi, nowhere else.
 
@@ -417,7 +417,7 @@ Run from the repo root here (not from inside `gateway/`, unlike the original wal
 - **Parameters used:** `KEY=cmd4` (must match the topics set in step 1: `VENKO/cmd4/*`), `CLIENT=AKVO_cmd4` (must match step 1's `aws.csv` `client_id` / `system.csv` `gateway_id`), `ACCT=884520769610`.
 - **Outcome:** certificate `arn:...:cert/e494e73e...ff9066f`, status `ACTIVE`; policy `venko-cmd4-gateway` attached to it (`iot:Connect` scoped to client `AKVO_cmd4`, `iot:Publish` scoped to `VENKO/cmd4/*`); thing `AKVO_cmd4` created with that certificate as its principal. Five files in `sites/cmd4/certs/`, all mode `600`: `certificate.pem.crt`, `private.pem.key`, `AmazonRootCA1.pem`, `cert.arn`, `policy.json`.
 
-**3. AWS stack** (VenkoDemo). Add a section to `infra/samconfig.toml` (copy `[akvo.*]` and change the key):
+**3. AWS stack** (VenkoDemo). Add a section to `infra/samconfig.toml` (copy `[cmd4.*]` and change the key):
 
 ```toml
 [cmd4.deploy.parameters]
@@ -453,7 +453,7 @@ sam deploy --config-env cmd4
     ```
 - **Outcome:** stack `venko-cmd4` → `CREATE_COMPLETE`. Outputs: `ApiUrl=https://4f9o3ozqu2.execute-api.us-east-1.amazonaws.com/prod`, `ApiKeyId=6wrs4s8nh3`, `DataBucketName=venko-cmd4-884520769610-us-east-1`, `WebBucketName=venko-cmd4-web-884520769610`, `DashboardUrl=https://d29127v2virrqh.cloudfront.net`.
 
-**4. Dashboard labels and publish.** `cmd4` uses the exact same 15 sensors as `akvo`, so `config/sites/cmd4.json` was built by copying `config/sites/akvo.json` verbatim and changing only `site.title` (to tell the two dashboards apart) - for a site with a different sensor set, edit the `sensors`/`groups`/`units` too, one entry per `DEVICE_ID.SensorName`. Then:
+**4. Dashboard labels and publish.** `cmd4` uses the exact same 15 sensors as site 1 (`config/sites/cmd4.json` only differs in `site.title`) - for a site with a different sensor set, edit the `sensors`/`groups`/`units` too, one entry per `DEVICE_ID.SensorName`. Then:
 
 ```bash
 bash tools/deploy_web.sh venko-cmd4 ../Akvo_Green/sites/cmd4/config_data/config.json config/sites/cmd4.json
@@ -639,7 +639,7 @@ All routes require the header `X-Api-Key`. Times are epoch ms or ISO-8601.
 | CORS error in browser console | `AllowedOrigin` must equal the exact dashboard origin |
 | `sam deploy` fails with `Failed to create changeset ... AWS::EarlyValidation::ResourceExistenceCheck` before the confirmation prompt | `WebBucketName` and `DataBucketName` were given the same value - they must be two distinct bucket names (or left blank for the defaults) |
 | `sam build --template <key>.yaml` says `Template file not found` | There is only one template, `template.yaml`, shared by every site - only `samconfig.toml`'s per-env section differs |
-| `sam deploy --config-env <key>` fails with `Missing option '--stack-name'` | `samconfig.toml` has no `[<key>.*]` section yet - add one (copy `[akvo.*]`) before using `--config-env` |
+| `sam deploy --config-env <key>` fails with `Missing option '--stack-name'` | `samconfig.toml` has no `[<key>.*]` section yet - add one (copy `[cmd4.*]`) before using `--config-env` |
 | `sam deploy` fails mid-upload with `Unable to upload artifact ... S3 Bucket does not exist`, even after the progress bar reaches 100% | The account's shared `aws-sam-cli-managed-default` SAM artifact bucket was deleted outside CloudFormation, but its stack still reports `CREATE_COMPLETE`. Delete that stale stack (`aws cloudformation delete-stack --stack-name aws-sam-cli-managed-default`) and redeploy - SAM recreates it fresh. Affects every site's next deploy, not just the one that hit it |
 
 **Data retention:** raw data moves to S3 Infrequent Access after 90 days and is never deleted automatically. Athena results and exports expire after 7 days. Reports are kept.
