@@ -13,3 +13,17 @@ image_repositories = []
 
 [cmd4.global.parameters]
 region = "us-east-1"
+
+# Site "demo" - deploy with: sam deploy --config-env demo
+[demo.deploy.parameters]
+stack_name = "venko-demo"
+resolve_s3 = true
+s3_prefix = "venko-demo"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "DataTopic=\"VENKO/demo/data\" SystemTopic=\"VENKO/demo/system\" PartitionStartDate=\"2026-10-09\" AllowedOrigin=\"*\" ReportTimezone=\"America/Mexico_City\" GlueDatabaseName=\"venko_demo\" DataBucketName=\"venko-demo-884520769610-us-east-1\" WebBucketName=\"venko-demo-web-884520769610\""
+image_repositories = []
+
+[demo.global.parameters]
+region = "us-east-1"

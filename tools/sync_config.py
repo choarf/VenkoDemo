@@ -9,6 +9,14 @@ labels, unit display names and grouping. Defaults to site cmd4's files.
   python3 tools/sync_config.py --source ../Akvo_Green/sites/<key>/config_data/config.json \
       --overrides config/sites/<key>.json --out build/config.json
   python3 tools/sync_config.py --source … --overrides … --bucket venko-<key>-<acct>-<region>   # upload to s3://.../config/config.json
+
+New site: --init writes a starter config/sites/<key>.json from the gateway's
+config.json instead - one entry per enabled sensor. Labels, groups, decimals and
+unit names are reused from the other sites' files where the sensor key or unit
+matches; anything else gets the raw sensor name, to translate by hand.
+
+  python3 tools/sync_config.py --init --source ../Akvo_Green/sites/<key>/config_data/config.json \
+      --overrides config/sites/<key>.json
 """
 import argparse
 import hashlib
@@ -61,13 +69,63 @@ def build(source: dict, overrides: dict) -> dict:
     }
 
 
+def init_overrides(source: dict, path: Path) -> dict:
+    """Starter overrides for a new site, reusing what other sites already say."""
+    known_sensors, known_units, defaults, brand = {}, {}, {}, ""
+    for other in sorted(path.parent.glob("*.json")):
+        o = json.loads(other.read_text())
+        for k, v in o.get("sensors", {}).items():
+            known_sensors.setdefault(k, v)
+        for k, v in o.get("units", {}).items():
+            known_units.setdefault(k, v)
+        defaults = defaults or o.get("defaults", {})
+        brand = brand or o.get("site", {}).get("brand", "")
+    sensors, units, groups, reused = {}, {}, [], 0
+    for dev in source.get("devices", []):
+        if not dev.get("enabled", True):
+            continue
+        for s in dev.get("sensors", []):
+            if not s.get("enabled", True):
+                continue
+            key = f'{dev["id"]}.{s["name"]}'
+            if key in known_sensors:
+                sensors[key] = known_sensors[key]
+                reused += 1
+            else:
+                sensors[key] = {"label": s["name"], "group": ""}
+            group = sensors[key].get("group")
+            if group and group not in groups:
+                groups.append(group)
+            unit = s.get("unit", "")
+            if unit:
+                units[unit] = known_units.get(unit, unit)
+    print(f"{len(sensors)} sensors ({reused} with labels from other sites, "
+          f"{len(sensors) - reused} to label by hand)")
+    return {
+        "site": {"title": f"Venko Demo – {path.stem.capitalize()}", "brand": brand},
+        "units": units,
+        "defaults": defaults or {"warn_margin": 0.1, "decimals": 2},
+        "groups": groups,
+        "sensors": sensors,
+    }
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
     ap.add_argument("--overrides", type=Path, default=DEFAULT_OVERRIDES)
     ap.add_argument("--out", type=Path, help="write the result to a local file")
     ap.add_argument("--bucket", help="upload to s3://BUCKET/config/config.json")
+    ap.add_argument("--init", action="store_true", help="write a starter --overrides file from --source and exit")
     args = ap.parse_args()
+
+    if args.init:
+        if args.overrides.exists():
+            sys.exit(f"error: {args.overrides} already exists - edit it, or delete it to start over")
+        body = init_overrides(json.loads(args.source.read_text()), args.overrides)
+        args.overrides.write_text(json.dumps(body, indent=2, ensure_ascii=False) + "\n")
+        print(f"wrote {args.overrides} - set site.title, then translate labels and fill in groups")
+        return
 
     cfg = build(json.loads(args.source.read_text()), json.loads(args.overrides.read_text()))
     body = json.dumps(cfg, indent=2, ensure_ascii=False)

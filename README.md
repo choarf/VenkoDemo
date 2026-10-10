@@ -39,7 +39,7 @@ tools/sync_config.py           Akvo_Green config.json → dashboard config (uplo
 tools/deploy_web.sh            uploads the dashboard config + app-config.js and publishes web/ to S3/CloudFront
 tools/mock_api.py              local UI server with SYNTHETIC data (development only)
 tools/site_summary.py          writes docs/sites/<key>.md: one site's AWS resources, URLs, IoT, live status, commands
-docs/sites/<key>.md            generated site summaries, plus README.md overview of all sites (see Adding a site, step 8)
+docs/sites/<key>.md            generated site summaries, plus README.md overview of all sites (see Adding a site, step 10)
 web/                           dashboard (index.html, css/, js/)
 ```
 
@@ -99,7 +99,7 @@ port,baudrate,timeout,parity,stopbits,bytesize,simulate_enabled
 - An AWS account in the same region as the gateway's IoT endpoint (`us-east-1`, from `config.json` → `aws.host`).
 - AWS CLI v2 with credentials that can create IAM roles, and the **AWS SAM CLI**.
 - Python 3.14 locally (matches the Lambda runtime, which `sam build` requires) (for `sync_config.py`; `boto3` needed for the upload).
-- The Akvo_Green gateway already publishing to AWS IoT Core (thing, certificate and policy exist). **No gateway code changes are required.**
+- A Raspberry Pi with an RS-485 adapter (or none, in simulate mode). [Adding a site](#step-by-step-from-a-blank-sd-card-to-a-working-dashboard) covers everything from a blank SD card, including the AWS IoT certificate and policy. No gateway code changes are required, except the known issue for real sensors noted there.
 
 ---
 
@@ -371,136 +371,188 @@ Pick a short **site key** (lowercase, e.g. `cmd4`) and derive every name from it
 | Web bucket | `venko-<key>-web-<account>` |
 | Athena DB | `venko_<key>` |
 
-### Step by step (worked example: site `cmd4`)
+### Step by step: from a blank SD card to a working dashboard
 
-Every step below is the actual sequence run for a real site in this account, `cmd4`, with the exact parameters and the result each step left behind - not a hypothetical. Steps 1-7 are done; the Pi (`192.168.68.129`) runs in **simulate mode** (`simulate_enabled=1`), so this site's dashboard shows synthetic data until it's switched to real sensors.
-
-**1. Gateway config** (dev machine, in Akvo_Green):
+The full sequence for a new site, starting from an empty SD card. Commands use shell variables, so set them once (example: a new site `plant5`):
 
 ```bash
-cd Akvo_Green
-mkdir -p sites/cmd4/config_data
-cp config_data/modbus.csv sites/cmd4/config_data/     # then set simulate_enabled: 1 for a demo without sensors, 0 for real ones
-cp config_data/Akvo_devices.csv sites/cmd4/config_data/devices.csv
-# system.csv: gateway_id AKVO_cmd4 · aws.csv: client_id AKVO_cmd4, topics VENKO/cmd4/data, VENKO/cmd4/system
-cd gateway && python3 config_manager.py build --config-dir ../sites/cmd4/config_data
+KEY=plant5; CLIENT=AKVO_plant5; ACCT=884520769610
 ```
 
-- **Parameters used:** site key `cmd4`; sensor set `Akvo_devices.csv` reused as-is (15 sensors - `Pt100Sensor`, `Ambient`, `Humedad`, `ORPSensor`, `PhSensor`, `TempPhSensor`, `DOSensor`, `CODSensor`, `TempCODSensor`, `TurbCODSensort`, `BODSensor`, `TOCSensor`, `CondSensor`, `TempCondSensor`, `TDSCondSensor`); `gateway_id`/`client_id` = `AKVO_cmd4`; topics = `VENKO/cmd4/data` / `VENKO/cmd4/system`.
-- **Pitfall hit:** the four CSVs were first copied into `sites/cmd4/` directly instead of `sites/cmd4/config_data/` - `build --config-dir ../sites/cmd4/config_data` then fails with `FileNotFoundError: .../sites/cmd4/config_data/devices.csv` because that folder was empty. Fix: `mv sites/cmd4/{devices,modbus,system,aws}.csv sites/cmd4/config_data/`.
-- **Outcome:** `sites/cmd4/config_data/config.json` built - `Loaded 15 devices`, `Validation successful` (with duplicate-slave-ID *warnings*, since several sensors share one physical Modbus unit - harmless).
+Keep `KEY` **lowercase** and type it the same way everywhere. Folder names, MQTT topics, IoT policy resources and S3 bucket names are all case-sensitive. A `sites/Demo` folder with topics `VENKO/demo/*` and a policy for `VENKO/Demo/*` doesn't fail loudly; the Pi just isn't allowed to publish.
 
-**2. Certificate, restricted policy and thing** (AWS IoT). The private key is only available at creation time; it goes into `sites/cmd4/certs/` (git-ignored) and onto the Pi, nowhere else.
+`cmd4` is the reference site: it was set up with these steps (Pi `192.168.68.129`, simulate mode), and its files are the ones copied below. The *cmd4* notes under each step are what happened there.
+
+> **Known issue - real sensors:** with `simulate_enabled=0` the gateway currently can't open the serial port: `edge_node_improved.py` passes the whole `modbus` config, including the `simulate` key, to `ModbusSerialClient(**self.cfg)`, which fails with `unexpected keyword argument 'simulate'` and retries forever. Simulate mode is unaffected. Fix that in Akvo_Green before installing a site on real sensors.
+
+**1. Write the SD card** (Raspberry Pi Imager, on any computer):
+
+- **OS:** *Raspberry Pi OS (64-bit) with desktop* - the desktop is needed for the AKVO Modbus Tool and the local-dashboard kiosk. *Lite* also works if you need neither (then use `--no-modbus-tool` in step 8).
+- **Edit settings:**
+  - hostname, e.g. `plant5`;
+  - user `pi` and a password;
+  - Wi-Fi SSID, password and country (skip for Ethernet);
+  - time zone `America/Mexico_City`;
+  - **Services:** enable SSH, *public-key only*, and paste your `~/.ssh/id_*.pub`.
+- Write the card, boot the Pi, then find its address (`ping plant5.local` or the router's client list). Reserve that IP on the router so it doesn't change.
+
+**2. Prepare the Pi:**
 
 ```bash
-KEY=cmd4; CLIENT=AKVO_cmd4; ACCT=884520769610
+ssh pi@<pi-address>
+sudo apt update && sudo apt full-upgrade -y && sudo reboot
+# after the reboot, with the RS-485 adapter plugged in:
+ls /dev/ttyUSB*        # expect /dev/ttyUSB0
+```
+
+**3. Gateway config** (dev machine, in Akvo_Green). Start from cmd4's files:
+
+```bash
+cd ~/git_reps/claude/projects/Venko/Akvo_Green
+mkdir -p sites/$KEY/config_data
+cp sites/cmd4/config_data/{devices,modbus,system,aws}.csv sites/$KEY/config_data/
+```
+
+Then edit the copies:
+
+| File | Set |
+|---|---|
+| `system.csv` | `gateway_id` = `$CLIENT`. Optionally `web_enabled=1` for the [local dashboard](#local-dashboard-on-each-pi) on port 8080, and `wifi1_ssid` / `wifi2_ssid` for the WiFi networks the Pi should join (preferred, fallback) |
+| `../wifi.csv` | Only with `wifi*_ssid`: the passwords, one `ssid,password` row per network, in `sites/$KEY/wifi.csv`. Git-ignored like the certs; never in `config.json` |
+| `aws.csv` | `client_id` = `$CLIENT`; `topic_pub` / `topic_system` = `VENKO/$KEY/data` / `VENKO/$KEY/system`; `data_bucket` / `web_bucket` = the names from the [Naming convention](#naming-convention); `dashboard_url` - fill in after step 5 |
+| `modbus.csv` | `simulate_enabled`: `1` = synthetic demo data, `0` = real sensors (see the known issue above) |
+| `devices.csv` | The sensor list - keep cmd4's 15 sensors or replace them |
+
+Build and validate:
+
+```bash
+cd gateway && python3 config_manager.py build --config-dir ../sites/$KEY/config_data && cd ..
+```
+
+- *cmd4:* `Loaded 15 devices`, `Validation successful`, plus duplicate-slave-ID *warnings* (several sensors share one physical Modbus unit - harmless).
+- **Pitfall:** the CSVs must be inside `sites/$KEY/config_data/`, not `sites/$KEY/`. Otherwise `build` fails with `FileNotFoundError: .../config_data/devices.csv`.
+
+**4. Certificate, restricted policy and thing** (AWS IoT, from the Akvo_Green root). The private key can only be downloaded now. It goes into `sites/$KEY/certs/` (git-ignored) and onto the Pi, nowhere else.
+
+```bash
 mkdir -p sites/$KEY/certs && cd sites/$KEY/certs && umask 077
 aws iot create-keys-and-certificate --set-as-active \
   --certificate-pem-outfile certificate.pem.crt --private-key-outfile private.pem.key \
   --query certificateArn --output text > cert.arn
-cp ../../../gateway/certs/AmazonRootCA1.pem .
-cat > policy.json <<EOF
+cp ../../cmd4/certs/AmazonRootCA1.pem .
+cat > policy.json <<JSON
 { "Version": "2012-10-17", "Statement": [
   { "Effect": "Allow", "Action": "iot:Connect", "Resource": "arn:aws:iot:us-east-1:$ACCT:client/$CLIENT" },
   { "Effect": "Allow", "Action": "iot:Publish", "Resource": "arn:aws:iot:us-east-1:$ACCT:topic/VENKO/$KEY/*" } ] }
-EOF
+JSON
 aws iot create-policy --policy-name venko-$KEY-gateway --policy-document file://policy.json
 aws iot attach-policy --policy-name venko-$KEY-gateway --target "$(cat cert.arn)"
 aws iot create-thing --thing-name $CLIENT
 aws iot attach-thing-principal --thing-name $CLIENT --principal "$(cat cert.arn)"
+cd ../../..
 ```
 
-Run from the repo root here (not from inside `gateway/`, unlike the original walkthrough), so the first two paths drop their `../`.
+- `KEY` must match the topics from step 3, and `CLIENT` must match `aws.csv`'s `client_id`.
+- *cmd4:* certificate `e494e73e…` `ACTIVE`, policy `venko-cmd4-gateway`, thing `AKVO_cmd4`. That left five files in `sites/cmd4/certs/`, all mode `600`: `certificate.pem.crt`, `private.pem.key`, `AmazonRootCA1.pem`, `cert.arn`, `policy.json`.
 
-- **Parameters used:** `KEY=cmd4` (must match the topics set in step 1: `VENKO/cmd4/*`), `CLIENT=AKVO_cmd4` (must match step 1's `aws.csv` `client_id` / `system.csv` `gateway_id`), `ACCT=884520769610`.
-- **Outcome:** certificate `arn:...:cert/e494e73e...ff9066f`, status `ACTIVE`; policy `venko-cmd4-gateway` attached to it (`iot:Connect` scoped to client `AKVO_cmd4`, `iot:Publish` scoped to `VENKO/cmd4/*`); thing `AKVO_cmd4` created with that certificate as its principal. Five files in `sites/cmd4/certs/`, all mode `600`: `certificate.pem.crt`, `private.pem.key`, `AmazonRootCA1.pem`, `cert.arn`, `policy.json`.
-
-**3. AWS stack** (VenkoDemo). Add a section to `infra/samconfig.toml` (copy `[cmd4.*]` and change the key):
+**5. AWS stack** (VenkoDemo). In `infra/samconfig.toml`, copy the `[cmd4.*]` sections to `[$KEY.*]` and replace every `cmd4` with the new key. Set `PartitionStartDate` to today and `AllowedOrigin` to `*` for now (locked down in step 7):
 
 ```toml
-[cmd4.deploy.parameters]
-stack_name = "venko-cmd4"
+[plant5.deploy.parameters]
+stack_name = "venko-plant5"
 resolve_s3 = true
-s3_prefix = "venko-cmd4"
+s3_prefix = "venko-plant5"
 region = "us-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "DataTopic=\"VENKO/cmd4/data\" SystemTopic=\"VENKO/cmd4/system\" PartitionStartDate=\"2026-10-04\" AllowedOrigin=\"*\" ReportTimezone=\"America/Mexico_City\" GlueDatabaseName=\"venko_cmd4\" DataBucketName=\"venko-cmd4-884520769610-us-east-1\" WebBucketName=\"venko-cmd4-web-884520769610\""
+parameter_overrides = "DataTopic=\"VENKO/plant5/data\" SystemTopic=\"VENKO/plant5/system\" PartitionStartDate=\"2026-10-09\" AllowedOrigin=\"*\" ReportTimezone=\"America/Mexico_City\" GlueDatabaseName=\"venko_plant5\" DataBucketName=\"venko-plant5-884520769610-us-east-1\" WebBucketName=\"venko-plant5-web-884520769610\""
 image_repositories = []
 
-[cmd4.global.parameters]
+[plant5.global.parameters]
 region = "us-east-1"
 ```
 
-then:
-
 ```bash
-cd infra
+cd ~/git_reps/claude/projects/Venko/VenkoDemo/infra
 sam build --template template.yaml
-sam deploy --config-env cmd4
+sam deploy --config-env $KEY
 ```
 
-- **Parameters used:** `DataTopic`/`SystemTopic` matching step 1 exactly; `PartitionStartDate` = today; `AllowedOrigin` left as `*` for now (locked down in step 5); `GlueDatabaseName=venko_cmd4`, `DataBucketName=venko-cmd4-884520769610-us-east-1`, `WebBucketName=venko-cmd4-web-884520769610` - following the [Naming convention](#naming-convention) table exactly.
-- **Pitfalls hit:**
-  - `sam build --template cmd4.yaml` fails - `Template file not found`. There is only ever **one** `template.yaml`, shared by every site; only `samconfig.toml`'s per-env section differs. Use `sam build --template template.yaml`.
-  - `sam deploy --config-env cmd4` fails with `Missing option '--stack-name'` until the `[cmd4.*]` section above actually exists in `samconfig.toml` - `--config-env` has nothing to read otherwise.
-  - Even with that fixed, deploy can fail mid-upload with `Error: Unable to upload artifact ... S3 Bucket does not exist`, despite the upload progress bar showing 100%. This means the account's shared SAM artifact bucket (`aws-sam-cli-managed-default-samclisourcebucket-...`) was deleted outside of CloudFormation, while the `aws-sam-cli-managed-default` stack that "owns" it still reports `CREATE_COMPLETE` - CloudFormation doesn't notice the drift on its own. Fix (affects every site's next deploy, not just this one): delete that stale stack and let SAM recreate it fresh on the next deploy -
+Note the `DashboardUrl` output. Put it in `aws.csv`'s `dashboard_url`, then rerun the build from step 3.
+
+- **Pitfalls:**
+  - There is only one template. `sam build --template $KEY.yaml` fails with `Template file not found`.
+  - `--config-env $KEY` fails with `Missing option '--stack-name'` until the `[$KEY.*]` section exists.
+  - If the upload fails with `S3 Bucket does not exist` (even at 100 %), the shared SAM artifact bucket was deleted outside CloudFormation. Delete the stale stack and redeploy, and SAM recreates it:
     ```bash
     aws cloudformation delete-stack --stack-name aws-sam-cli-managed-default --region us-east-1
     aws cloudformation wait stack-delete-complete --stack-name aws-sam-cli-managed-default --region us-east-1
     ```
-- **Outcome:** stack `venko-cmd4` → `CREATE_COMPLETE`. Outputs: `ApiUrl=https://4f9o3ozqu2.execute-api.us-east-1.amazonaws.com/prod`, `ApiKeyId=6wrs4s8nh3`, `DataBucketName=venko-cmd4-884520769610-us-east-1`, `WebBucketName=venko-cmd4-web-884520769610`, `DashboardUrl=https://d29127v2virrqh.cloudfront.net`.
+- *cmd4:* `CREATE_COMPLETE`, `DashboardUrl=https://d29127v2virrqh.cloudfront.net`.
 
-**4. Dashboard labels and publish.** Write `config/sites/cmd4.json` (start from another site's file) - for a site with a different sensor set, edit the `sensors`/`groups`/`units` too, one entry per `DEVICE_ID.SensorName`. Then:
+**6. Dashboard labels and publish** (VenkoDemo root):
 
 ```bash
-bash tools/deploy_web.sh venko-cmd4 ../Akvo_Green/sites/cmd4/config_data/config.json config/sites/cmd4.json
+cd ~/git_reps/claude/projects/Venko/VenkoDemo
+python3 tools/sync_config.py --init --source ../Akvo_Green/sites/$KEY/config_data/config.json --overrides config/sites/$KEY.json
+# edit config/sites/$KEY.json: site.title, and the labels/groups of any sensor it couldn't reuse
+bash tools/deploy_web.sh venko-$KEY ../Akvo_Green/sites/$KEY/config_data/config.json config/sites/$KEY.json
 ```
 
-- **Parameters used:** stack `venko-cmd4`, gateway config `sites/cmd4/config_data/config.json`, overrides `config/sites/cmd4.json`.
-- **Outcome:** topic-match safety check passed (config's `topic_pub`/`topic_system` matched the stack's `DataTopic`/`SystemTopic`); `15 sensors, gateway AKVO_cmd4` uploaded to `s3://venko-cmd4-884520769610-us-east-1/config/config.json`; `web/` (13 files) synced to the web bucket; `app-config.js` written with this stack's API URL/key. Verified directly: `curl https://d29127v2virrqh.cloudfront.net` → `HTTP 200`, real page; `GET /config` with the API key → `HTTP 200`, `"site":{"title":"Venko Demo – Cmd4"}`, 15 sensors.
+- `--init` writes one entry per enabled sensor in the site's `config.json`. Sensors and units that another site already labels (same `DEVICE_ID.SensorName`) get that site's label, group and decimals. The rest get their raw name and an empty group, and the command prints how many need labelling by hand. It never overwrites an existing file.
+- Override keys are `DEVICE_ID.SensorName` and are case-sensitive.
+- `deploy_web.sh` refuses to upload if the config's topics don't match the stack's.
+- *cmd4:* `15 sensors, gateway AKVO_cmd4` uploaded, `web/` synced, `app-config.js` written. The dashboard returned `HTTP 200`.
 
-**5. Lock CORS** to the real `DashboardUrl` from step 3: set `AllowedOrigin` in `[cmd4.deploy.parameters]`, then
+**7. Lock CORS** to the `DashboardUrl`: set `AllowedOrigin` in `[$KEY.deploy.parameters]`, then:
 
 ```bash
-sam deploy --config-env cmd4
-API_ID=$(aws cloudformation describe-stack-resource --stack-name venko-cmd4 \
+cd infra && sam deploy --config-env $KEY && cd ..
+API_ID=$(aws cloudformation describe-stack-resource --stack-name venko-$KEY \
   --logical-resource-id Api --query StackResourceDetail.PhysicalResourceId --output text)
 aws apigateway create-deployment --rest-api-id "$API_ID" --stage-name prod
 ```
 
-- **Parameters used:** `AllowedOrigin="https://d29127v2virrqh.cloudfront.net"` (replacing `*`).
-- **Outcome:** stack updated (`UPDATE_COMPLETE`, parameter-only change - much faster than the first deploy, no CloudFront recreation); API stage redeployed. Verified with a CORS preflight: the response's `Access-Control-Allow-Origin` is now the fixed string `https://d29127v2virrqh.cloudfront.net` for *every* request regardless of the caller's actual `Origin` header - which is exactly what makes a browser loaded from any other origin reject the response, while the real dashboard (whose own origin matches) works normally.
+SAM doesn't republish the API stage when only a parameter changes, hence the `create-deployment`.
 
-**6. Install the Pi** (Raspberry Pi OS, network + SSH working, RS-485 adapter on `/dev/ttyUSB0`). From the dev machine:
+**8. Install the gateway on the Pi** (dev machine, Akvo_Green):
 
 ```bash
-cd Akvo_Green
-tools/push_site.sh cmd4 pi@<pi-address> --certs      # code + config.json + certs
+cd ~/git_reps/claude/projects/Venko/Akvo_Green
+tools/push_site.sh $KEY pi@<pi-address> --certs        # add --no-modbus-tool on Lite
 ssh pi@<pi-address> 'cd Akvo_Green && ./install.sh --skip-certs && sudo systemctl start akvo-green'
 ```
 
-- **Status: done** - Pi `192.168.68.129`, user `pi`, service `akvo-green` enabled and running. `push_site.sh` syncs the code without touching the Pi's `config_data/`, `data/`, `logs/`, `.venv/` or certs, copies the site's `config.json`, and (with `--certs`) its certificates. It also installs the AKVO Modbus Tool desktop app (`akvo-modbus`, from `../Tools/AkvoModbus`) when it changed; `--no-modbus-tool` skips it. `install.sh` sets up packages, the venv, serial-port access and the `akvo-green` service; it only needs to run once per Pi.
+- `push_site.sh` syncs the code and copies the site's `config.json` and, with `--certs`, its certificates. It never touches the Pi's `config_data/`, `data/`, `logs/`, `.venv/` or certs. It also installs the AKVO Modbus Tool (`akvo-modbus`, from `../Tools/AkvoModbus`) when that changed.
+- `install.sh` sets up packages, the venv, serial-port access, the reboot sudo rule and the `akvo-green` / `akvo-history-web` services. It only needs to run once per Pi.
+- With `wifi1_ssid`/`wifi2_ssid` set, every push also saves those networks on the Pi (NetworkManager profiles `akvo-wifi1`/`akvo-wifi2`). It doesn't drop the current connection; the Pi switches when its current network goes away or at the next reboot. To change a site's WiFi later: edit `system.csv` and `wifi.csv`, rebuild, push. Details: Akvo_Green `docs/edge_node_config/CONFIGURATION.md`, "WiFi networks".
 
-**7. Check** (within ~1 minute of the service starting):
-
-```bash
-aws s3 cp s3://venko-cmd4-884520769610-us-east-1/latest/data.json - | head -c 300; echo
-```
-
-- **Status: done (2026-10-05)** - `latest/data.json` updates every poll, `raw/data/` fills via Firehose, payloads carry `"simulated": true`. Once a Pi is publishing, open the dashboard and confirm **Gateway en línea**, dials filling in. If nothing arrives: `journalctl -u akvo-green -f` on the Pi (a policy refusal shows as a connection error), the certificate is `ACTIVE`, and `aws.csv`'s client id/topics match the policy (step 2) and the stack (step 3).
-
-**8. Write the site summary** - one page with everything about the site: dashboard and API URLs, API key id, S3 buckets, IoT thing/certificate/policy/rules, Firehose, Lambdas, DynamoDB, Athena, gateway settings, live status (last data, simulated or real) and ready-to-run commands:
+**9. Check** (within about a minute):
 
 ```bash
-python3 tools/site_summary.py cmd4 --pi pi@192.168.68.129     # → docs/sites/cmd4.md
+ssh pi@<pi-address> 'journalctl -u akvo-green -n 30 --no-pager'    # "MQTT connected", no Modbus errors
+aws s3 cp s3://venko-$KEY-$ACCT-us-east-1/latest/data.json - | head -c 300; echo
 ```
 
-- `<key>` is the `samconfig.toml` env. It reads the stack from AWS and the site's files in Akvo_Green, so run it after steps 1-7.
-- `--pi` is the Pi's SSH target (not stored anywhere in AWS). It's remembered from the previous summary, so it only needs to be given once.
-- **No secrets** are written: the API key appears as its id plus the command that prints its value; certificates only as id, status and folder. The file is safe to commit and share.
-- It's a snapshot - **rerun it after any change to the site** (redeploy, new certificate, switch to real sensors) rather than editing it by hand.
-- Each run also rebuilds [`docs/sites/README.md`](docs/sites/README.md): every site side by side (client id, topics, Pi, Modbus mode, status, web page, S3 data/web buckets, stack), taken from the site pages - no extra AWS calls.
+Open the dashboard and confirm **Gateway en línea** with the dials filling in. If nothing arrives, check:
+- the certificate is `ACTIVE` (a policy refusal shows as a connection error in the journal);
+- `aws.csv`'s client id and topics match the policy (step 4) and the stack (step 5);
+- `s3://<data bucket>/errors/iot/`.
+
+*cmd4:* `latest/data.json` updates every poll, `raw/data/` fills via Firehose, and payloads carry `"simulated": true`.
+
+**10. Record the site** - write the site summary: one page with the site's URLs, API key id, buckets, IoT resources, Lambdas, Athena, gateway settings, live status and ready-to-run commands.
+
+```bash
+cd ~/git_reps/claude/projects/Venko/VenkoDemo
+python3 tools/site_summary.py $KEY --pi pi@<pi-address>     # → docs/sites/$KEY.md, and rebuilds docs/sites/README.md
+```
+
+- `--pi` is remembered from the previous summary, so it only needs to be given once.
+- **No secrets** are written: the API key appears as its id plus the command that prints it, and certificates only as id, status and folder.
+- It's a snapshot, so **rerun it after any change to the site** instead of editing it.
+- Add the site to [Sites in this account](#sites-in-this-account) above and to both tables in Akvo_Green's `sites/README.md`.
+- Commit both repos. The certificates are git-ignored; check `git status` anyway before committing.
 - Example: [`docs/sites/cmd4.md`](docs/sites/cmd4.md).
 
 ### Local dashboard on each Pi
@@ -553,7 +605,7 @@ sam delete --stack-name venko-<key>
 
 The IoT certificate/thing/policy are **not** part of the stack (they were
 created by hand in [Adding a site](#adding-a-site-another-pi--its-own-aws-stack-and-dashboard)
-step 2, not by `template.yaml`) - detach and delete them if the Pi is
+step 4, not by `template.yaml`) - detach and delete them if the Pi is
 gone for good:
 
 ```bash
