@@ -95,7 +95,7 @@
       <button id="b-next" title="Pantalla siguiente (→)">Siguiente ▶</button>
       <button id="b-png" title="Descarga la pantalla actual como PNG 128×64 de 1 bit">Exportar PNG</button>
     </div>
-    <p class="hint">Ciclo: logo con barra de arranque (solo al arrancar) → Sistema → Sensores → Sensores → Sistema → Sensores → Sensores… La lista de sensores se desplaza (o va en páginas 1…n). La lista dura lo que tarda en recorrerse; las demás pantallas, el tiempo configurado.
+    <p class="hint">Ciclo: logo (solo al arrancar; «Venko → Akvo» se escribe 3 veces hasta 100% y parpadea 3 veces) → Sistema → Sensores → Sensores → Sistema → Sensores → Sensores… La lista de sensores se desplaza (o va en páginas 1…n). La lista dura lo que tarda en recorrerse; las demás pantallas, el tiempo configurado.
       Atajos: <kbd>espacio</kbd> pausa, <kbd>←</kbd> <kbd>→</kbd> cambiar pantalla, <kbd>b</kbd> arranque.</p>
   </section>
 
@@ -469,24 +469,24 @@ function drawSensorScroll(now) {
   header(cols() >= 30 ? `SENSORES ${first}-${last}/${sensors.length}` : "SENSORES", now);
 }
 
-// GHOTRIX logo, 128x60 1-bit, one hex string of 32 digits per row (MSB = left).
+// GHOTRIX / Venko → Akvo logo, 128x60 1-bit, one hex string of 32 digits per row (MSB = left).
 // Same image as Akvo_Green/gateway/oled_logo.png, which the real display shows.
 const LOGO_HEX = (
-  "00000000000000000000000000000000 00000000000000000000000000000000 000000000000001ff800000000000000 000000000000007ffe00000000000000 " +
-  "00000000000001ffff80000000000000 00000000000003ffff80000000000000 00000000000007f00f00000000000000 0000000000000fc00200000000000000 " +
-  "0000000000000f800000000000000000 0000000000001f000000000000000000 0000000000001e000000000000000000 0000000000003e000000000000000000 " +
-  "0000000000003c000000000000000000 0000000000003c000000000000000000 0000000000003c000000000000000000 0000000000003c000000000000000000 " +
-  "0000000000003c01fffc000000000000 0000000000003c01fffc000000000000 0000000000003c01fffc000000000000 0000000000003c00003c000000000000 " +
-  "0000000000003e00007c000000000000 0000000000001e000078000000000000 0000000000001f0000f8000000000000 0000000000000f8001f0000000000000 " +
-  "0000000000000fc003f0000000000000 00000000000007f00fe0000000000000 00000000000003ffffc0000000000000 00000000000001ffff80000000000000 " +
-  "000000000000007ffe00000000000000 000000000000001ff800000000000000 00000000000000000000000000000000 00000000000000000000000000000000 " +
-  "00000000000000000000000000000000 00000000000000000000000000000000 0000007e18187e1ff9fe07e181800000 0000007e18187e1ff9fe07e181800000 " +
-  "00000181981981818181818181800000 00000181981981818181818181800000 00000180181981818181818066000000 00000180181981818181818066000000 " +
-  "000001801ff9818181fe018018000000 000001801ff9818181fe018018000000 00000187981981818198018066000000 00000187981981818198018066000000 " +
-  "00000181981981818186018181800000 00000181981981818186018181800000 0000007e18187e01818187e181800000 0000007e18187e01818187e181800000 " +
   "00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 " +
-  "00000000000000000000000000000000 000000000004aa406ceec00000000000 00000000000aaaa08a88a00000000000 00000000000ecaa0accca00000000000 " +
-  "00000000000aaaa0aa88a00000000000 00000000000aa4406aeea00000000000 00000000000000000000000000000000 00000000000000000000000000000000 "
+  "00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 " +
+  "00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 " +
+  "007c01f03e007c01fffc3ff00f83e0f8 01ff01f03e01ff01fffc3ffc0f83e1f0 07ff81f03e03ffc1fffc3ffe0f81f1f0 0fffc1f03e07ffc00fc03e7e0f81f3e0 " +
+  "0f87c1f03e0fc3e00f803e3e0f80ffc0 0f83c1f03e0f83e00f803e1e0f80ffc0 1f0001f83e0f81f00f803e1e0f807fc0 1f0001fffe0f01f00f803e3e0f807f80 " +
+  "1f1fe1fffe0f01f00f803ffe0f803f80 1f1fe1fffe0f01f00f803ffc0f807f80 1f1fe1f87e0f81f00f803ff80f807fc0 0f83c1f03e0f83e00f803efc0f80ffc0 " +
+  "0f83c1f03e0fc3e00f803e7c0f80fbe0 07ffc1f03e07ffe00f803e7e0f81f3e0 07ff81f03e07ffc00f803e3e0f81f1f0 03ff01f03e01ff800f803e3e0f83e1f0 " +
+  "00fc01f03e007c000f803e1f0f83e0f8 00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 " +
+  "00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 " +
+  "00000000000000000000000000000000 00000000000000000000000000000000 00000000000600000000060000000000 00000618000600000001c60000000000 " +
+  "00000318000600000003c60000000000 00000339e7c667800403c678c7800000 000003333666ccc0060366cc8cc00000 000001b3f6678cc0ff06678d8cc00000 " +
+  "000001e306678cc00607f7878cc00000 000001e30666ccc0040636c70cc00000 000000e1f6666780000c366707800000 00000000000000000000000000000000 " +
+  "00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 " +
+  "00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 " +
+  "00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 "
 ).split(" ").filter(Boolean);
 const DEFAULT_LOGO = new Uint8Array(W * H);
 LOGO_HEX.forEach((h, y) => {
@@ -494,9 +494,45 @@ LOGO_HEX.forEach((h, y) => {
 });
 
 let customLogo = DEFAULT_LOGO;  // Uint8Array(W*H); null = the old text logo
-function drawLogo(now, progress) {
+// Boot: the logo's last row of ink (the "Venko → Akvo" line) writes itself on left to
+// right BOOT_PASSES times (the last pass ends at 100%), then flashes BOOT_FLASHES times.
+const BOOT_PASSES = 3, BOOT_PASS_MS = 1200, BOOT_FLASHES = 3, BOOT_FLASH_MS = 500;
+const BOOT_MS = BOOT_PASSES * BOOT_PASS_MS + BOOT_FLASHES * BOOT_FLASH_MS;  // 5.1 s
+
+function bootLineBand(logo) {  // [x0, y0, x1, y1] of the last block of inked rows, or null
+  const rows = H - 4, bands = [];
+  let start = null;
+  for (let y = 0; y <= rows; y++) {
+    let ink = false;
+    if (y < rows) for (let x = 0; x < W && !ink; x++) ink = !!logo[y * W + x];
+    if (ink && start === null) start = y;
+    else if (!ink && start !== null) { bands.push([start, y]); start = null; }
+  }
+  if (bands.length < 2) return null;
+  const [y0, y1] = bands[bands.length - 1];
+  let x0 = W, x1 = 0;
+  for (let y = y0; y < y1; y++) for (let x = 0; x < W; x++) if (logo[y * W + x]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x + 1); }
+  return [x0, y0, x1, y1];
+}
+function bootLineState(ms) {  // [written 0..1, lit]
+  const write = BOOT_PASSES * BOOT_PASS_MS;
+  if (ms < write) return [(ms % BOOT_PASS_MS) / BOOT_PASS_MS, true];
+  const t = ms - write;
+  if (t >= BOOT_FLASHES * BOOT_FLASH_MS) return [1, true];
+  return [1, (t % BOOT_FLASH_MS) >= BOOT_FLASH_MS / 2];
+}
+
+function drawLogo(now, ms) {
+  const progress = ms / BOOT_MS;
   if (customLogo) {
     for (let i = 0; i < W * (H - 4); i++) fb[i] = customLogo[i];
+    const band = bootLineBand(customLogo);
+    if (band) {
+      const [x0, y0, x1, y1] = band, [written, lit] = bootLineState(ms);
+      const cut = lit ? x0 + Math.round((x1 - x0) * written) : x0;
+      fill(cut, y0, x1 - cut, y1 - y0, 0);  // erase the part not written yet
+      return;
+    }
   } else {
     const name = "GHOTRIX";
     text(centerX(name, 2, FONTS.f57), 4, name, { scale: 2, f: FONTS.f57 });
@@ -555,6 +591,7 @@ function boot() { booting = true; idx = 0; elapsed = 0; cyclesDone = 0; buildTim
 // How long a screen stays up (ms): the scrolling list takes as long as its scroll needs.
 function screenDur(cur) {
   const base = (+$("#c-dur").value || 5) * 1000;
+  if (cur.kind === "logo") return BOOT_MS;
   if (cur.kind !== "sensors" || !cur.scroll) return base;
   const { max } = scrollMetrics();
   return max ? 2 * SCROLL_PAUSE + max / scrollSpeed() * 1000 : base;
@@ -563,7 +600,7 @@ function screenDur(cur) {
 function renderFrame(now) {
   fb.fill(0);
   const cur = current();
-  if (cur.kind === "logo") drawLogo(now, elapsed / screenDur(cur));
+  if (cur.kind === "logo") drawLogo(now, elapsed);
   else if (cur.kind === "system") drawSystem(now);
   else if (cur.scroll) drawSensorScroll(now);
   else drawSensors(now, cur.page, cur.pages);

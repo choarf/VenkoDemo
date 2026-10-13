@@ -13,7 +13,7 @@ browser. The implementation plan is in `docs/plans/oled_display.md` in the sibli
 
 ## Screen sequence
 
-1. **GHOTRIX logo with a boot progress bar**, at start-up only (5 s).
+1. **GHOTRIX logo**, at start-up only: the "Venko → Akvo" line writes itself on 3 times (100%), then flashes 3 times (5.1 s).
 2. **Sistema** (5 s).
 3. **Sensores**: the sensor list, scrolling.
 4. **Sensores** again.
