@@ -29,11 +29,15 @@ tools/deploy_web.sh <stack> <gateway-config.json> <overrides.json>
 # per-site summary page (AWS resources, URLs, IoT, live status) -> docs/sites/<key>.md
 python3 tools/site_summary.py <samconfig-env> [--pi user@host]
 
-# preview dashboard config built from the gateway config (defaults to site cmd4)
-python3 tools/sync_config.py --out build/config.json
+# preview dashboard config built from a site's gateway config (no args = site cmd4)
+python3 tools/sync_config.py --source ../Akvo_Green/sites/<key>/config_data/config.json \
+    --overrides config/sites/<key>.json --out build/config.json
+# new site: write a starter overrides file (labels reused from other sites; refuses to overwrite)
+python3 tools/sync_config.py --init --source ../Akvo_Green/sites/<key>/config_data/config.json \
+    --overrides config/sites/<key>.json
 ```
 
-Python 3.14 (Lambda runtime `python3.14`). There is no `.gitignore`, and `infra/.aws-sam/` (SAM build output) is committed — don't hand-edit it and avoid staging it with source changes. No linter/formatter or JS build step is configured; the web app is plain ES modules loaded directly by the browser, with Highcharts from CDN.
+Python 3.14 (Lambda runtime `python3.14`). `.gitignore` lists `infra/.aws-sam/` and `__pycache__/`, but both were committed earlier and are still tracked, so they show as modified after any build/test run — never stage them with source changes (stage files by name, not `git add -A`). `web/app-config.js` and `build/` are ignored. No linter/formatter or JS build step is configured; the web app is plain ES modules loaded directly by the browser, with Highcharts from CDN.
 
 ## Architecture
 
@@ -51,8 +55,10 @@ Python 3.14 (Lambda runtime `python3.14`). There is no `.gitignore`, and `infra/
 
 **Sensor config pipeline.** Sensors are not hard-coded anywhere. `tools/sync_config.py` reads the gateway's `config.json` (from `../Akvo_Green`), strips the `aws`/`modbus` sections (cert paths must never be uploaded), merges display overrides (`config/sites/<key>.json`; keys are case-sensitive `DEVICE_ID.SensorName`), and uploads to `s3://<data bucket>/config/config.json`. The API, reports and dashboard all read that. New sensors need no stack redeploy.
 
-**Multi-site.** One Pi = one stack = one dashboard; sites share code and AWS account only. Per-site params live in `infra/samconfig.toml` sections (`[cmd4.*]`, …; there is no `[default.*]`, so always pass `--config-env`). `deploy_web.sh` refuses to upload if the gateway config's topics don't match the stack's, and writes `app-config.js` (API URL + key) straight to that site's web bucket — never into `web/` — so sites can't overwrite each other. A change to `web/` must be deployed to **every** site. Don't change `DataBucketName` on an existing stack (bucket is `Retain`; a new empty one would be created).
+**Multi-site.** One Pi = one stack = one dashboard; sites share code and AWS account only. Current sites: `cmd4`, `demo`. A site key is lowercase and is used everywhere: samconfig env `<key>`, stack `venko-<key>`, topics `VENKO/<key>/{data,system}`, buckets `venko-<key>-…`, Glue DB `venko_<key>`, overrides `config/sites/<key>.json`, gateway folder `../Akvo_Green/sites/<key>/` (its `aws.csv` topics and `certs/policy.json` must use the same lowercase key — IoT policy resources are case-sensitive). Per-site params live in `infra/samconfig.toml` sections (`[cmd4.*]`, …; there is no `[default.*]`, so always pass `--config-env`). The README's "Step by step: from a blank SD card…" section is the full procedure for adding a site. `deploy_web.sh` refuses to upload if the gateway config's topics don't match the stack's, and writes `app-config.js` (API URL + key) straight to that site's web bucket — never into `web/` — so sites can't overwrite each other. A change to `web/` must be deployed to **every** site. Don't change `DataBucketName` on an existing stack (bucket is `Retain`; a new empty one would be created).
 
 **Web (`web/`).** `js/main.js` does hash routing between views (`overview`, `test`, `alarms`, `history`, `reports`), polls `/live` + `/tests/active` every 10 s, and dispatches to `js/modules/*.js`. Most views have a same-named module; the `test` view is `hmi.js` (start/stop, comments) using `trend.js` for the live chart, and it receives every live poll via `hmi.onLive`. `api.js` does fetch with `X-Api-Key` from `window.VENKO` in `app-config.js` (generated per site, not in the repo). Charts created in hidden views must be reflowed on show.
 
 **CORS gotcha.** After changing `AllowedOrigin`, SAM doesn't redeploy the API stage; run `aws apigateway create-deployment --rest-api-id <id> --stage-name prod`. Also persist it in `samconfig.toml` or a plain `sam deploy` resets it to `*`.
+
+**Teardown gotcha.** `DataBucket` is `Retain`, so deleting a stack leaves the bucket behind. A new stack whose `DataBucketName`/`WebBucketName`/`GlueDatabaseName` already exist (left over, or owned by another stack) ends in `ROLLBACK_COMPLETE`; remove the old stack/bucket first. If the bucket was already removed, `sam delete` fails with `NoSuchBucket`; use `aws cloudformation delete-stack --stack-name venko-<key>` instead.
