@@ -117,7 +117,7 @@
         <div class="row">
           <input type="file" id="c-logo-file" accept="image/*">
           <label><input type="checkbox" id="c-logo-inv"> invertir</label>
-          <button id="c-logo-clear" type="button">Quitar</button>
+          <button id="c-logo-clear" type="button" title="Volver al logo GHOTRIX">Quitar</button>
         </div>
         <label for="c-sens-rep">Sensores por vuelta</label>
         <input type="number" id="c-sens-rep" min="1" max="5" value="2" title="Veces que se recorre la lista de sensores antes de volver a Sistema">
@@ -469,7 +469,31 @@ function drawSensorScroll(now) {
   header(cols() >= 30 ? `SENSORES ${first}-${last}/${sensors.length}` : "SENSORES", now);
 }
 
-let customLogo = null;  // Uint8Array(W*H) or null
+// GHOTRIX logo, 128x60 1-bit, one hex string of 32 digits per row (MSB = left).
+// Same image as Akvo_Green/gateway/oled_logo.png, which the real display shows.
+const LOGO_HEX = (
+  "00000000000000000000000000000000 00000000000000000000000000000000 000000000000001ff800000000000000 000000000000007ffe00000000000000 " +
+  "00000000000001ffff80000000000000 00000000000003ffff80000000000000 00000000000007f00f00000000000000 0000000000000fc00200000000000000 " +
+  "0000000000000f800000000000000000 0000000000001f000000000000000000 0000000000001e000000000000000000 0000000000003e000000000000000000 " +
+  "0000000000003c000000000000000000 0000000000003c000000000000000000 0000000000003c000000000000000000 0000000000003c000000000000000000 " +
+  "0000000000003c01fffc000000000000 0000000000003c01fffc000000000000 0000000000003c01fffc000000000000 0000000000003c00003c000000000000 " +
+  "0000000000003e00007c000000000000 0000000000001e000078000000000000 0000000000001f0000f8000000000000 0000000000000f8001f0000000000000 " +
+  "0000000000000fc003f0000000000000 00000000000007f00fe0000000000000 00000000000003ffffc0000000000000 00000000000001ffff80000000000000 " +
+  "000000000000007ffe00000000000000 000000000000001ff800000000000000 00000000000000000000000000000000 00000000000000000000000000000000 " +
+  "00000000000000000000000000000000 00000000000000000000000000000000 0000007e18187e1ff9fe07e181800000 0000007e18187e1ff9fe07e181800000 " +
+  "00000181981981818181818181800000 00000181981981818181818181800000 00000180181981818181818066000000 00000180181981818181818066000000 " +
+  "000001801ff9818181fe018018000000 000001801ff9818181fe018018000000 00000187981981818198018066000000 00000187981981818198018066000000 " +
+  "00000181981981818186018181800000 00000181981981818186018181800000 0000007e18187e01818187e181800000 0000007e18187e01818187e181800000 " +
+  "00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 00000000000000000000000000000000 " +
+  "00000000000000000000000000000000 000000000004aa406ceec00000000000 00000000000aaaa08a88a00000000000 00000000000ecaa0accca00000000000 " +
+  "00000000000aaaa0aa88a00000000000 00000000000aa4406aeea00000000000 00000000000000000000000000000000 00000000000000000000000000000000 "
+).split(" ").filter(Boolean);
+const DEFAULT_LOGO = new Uint8Array(W * H);
+LOGO_HEX.forEach((h, y) => {
+  for (let x = 0; x < W; x++) DEFAULT_LOGO[y * W + x] = (parseInt(h[x >> 2], 16) >> (3 - (x & 3))) & 1;
+});
+
+let customLogo = DEFAULT_LOGO;  // Uint8Array(W*H); null = the old text logo
 function drawLogo(now, progress) {
   if (customLogo) {
     for (let i = 0; i < W * (H - 4); i++) fb[i] = customLogo[i];
@@ -736,7 +760,7 @@ function loadLogo(file) {
 }
 $("#c-logo-file").addEventListener("change", e => { if (e.target.files[0]) { loadLogo(e.target.files[0]); boot(); } });
 $("#c-logo-inv").addEventListener("change", () => { const f = $("#c-logo-file").files[0]; if (f) loadLogo(f); });
-$("#c-logo-clear").addEventListener("click", () => { customLogo = null; $("#c-logo-file").value = ""; });
+$("#c-logo-clear").addEventListener("click", () => { customLogo = DEFAULT_LOGO; $("#c-logo-file").value = ""; });
 
 // ============================================================ main loop
 let prev = performance.now(), lastPoll = Date.now();
