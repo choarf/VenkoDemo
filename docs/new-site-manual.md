@@ -48,25 +48,62 @@ Set these shell variables once on your computer; every command below uses them:
 KEY=plant5; CLIENT=AKVO_plant5; ACCT=884520769610
 ```
 
-## What you need
+## Requirements
+
+Have everything below ready before step 1; the information in the first table is what most often stalls a setup halfway.
+
+**Information to collect first**
+
+| Item | Example | Used in |
+| --- | --- | --- |
+| Site key (lowercase) | `plant5` | everywhere |
+| Pi's IP address, reserved on the site router | `192.168.68.140` | steps 2, 8, 9 |
+| WiFi networks: up to 2 SSIDs + passwords (none if on Ethernet) | `Planta`, `Oficina` | step 4 |
+| Sensor list, from each sensor's Modbus manual: slave address, register address and count, data type, scale/offset, unit, alarm min/max | `PhSensor`: slave 25, reg 0, 2 regs, float, pH 0–14 | step 3 (`devices.csv`) |
+| Bus serial settings: baud rate, parity, stop bits, data bits | 9600, N, 1, 8 | step 3 (`modbus.csv`) |
+| Site time zone | `America/Mexico_City` | steps 1, 3, 6 |
+| Dashboard title and Spanish sensor labels | `Venko – Plant5`, `Temperatura Pt100` | step 7 |
 
 **Hardware at the site**
 
 | Part | Notes |
 | --- | --- |
-| Raspberry Pi 4, 3B+ or CM5 + a 16 GB+ SD card | Pi 4 if it will drive a monitor |
+| Raspberry Pi 4, 3B+ or CM5 + 16 GB+ SD card | Pi 4 if it will drive a monitor |
 | Pi power supply, 5 V 2.4 A or more | Short, thick cable; the official 5.1 V 3 A gives the most margin |
 | RS-485 interface | USB-RS485 adapter (`/dev/ttyUSB0`) or Waveshare 2-CH isolated RS485 HAT (`/dev/ttySC0`) |
-| Sensor power supply, 12 V | Separate from the Pi. For a bus like cmd4's (7 devices, one with a UV lamp and wiper) use 2.5–3 A |
-| Optional: 1.54" I2C OLED (SSD1309), monitor | The monitor needs its own 5 V 3 A supply, never a Pi USB port |
+| RS-485 cabling | Twisted pair A/B plus GND reference; 120 Ω termination at both ends of the line |
+| Sensor power supply, 12 V | Separate from the Pi; for a bus like cmd4's (7 devices, one with a UV lamp and wiper) 2.5–3 A |
+| Network | Ethernet cable or WiFi coverage at the cabinet |
+| Optional: 1.54" I2C OLED (SSD1309), monitor + HDMI cable, keyboard/mouse | The monitor needs its own 5 V 3 A supply, never a Pi USB port |
 
-**On your computer**
+**Network access from the Pi**
 
-- Both repos side by side: `~/git_reps/claude/projects/Venko/Akvo_Green` and `.../Venko/VenkoDemo`.
-- AWS CLI logged in to account `884520769610`, region `us-east-1` (`aws sts get-caller-identity` must work).
-- AWS SAM CLI and Python 3 (for `sam build`/`sam deploy` and the config tools).
-- An SSH key (`~/.ssh/id_*.pub`) to paste into Raspberry Pi Imager.
-- Raspberry Pi Imager.
+- Outbound internet: TCP **8883** to AWS IoT (`a2zzu55sjawy4x-ats.iot.us-east-1.amazonaws.com`, MQTT over TLS) and 443 for updates.
+- DNS, and TCP 53 to `8.8.8.8` (the gateway's internet check).
+- SSH (22) from your computer to the Pi on the local network.
+
+**Software on your computer**
+
+| Tool | Tested version | Used for |
+| --- | --- | --- |
+| Git + both repos side by side: `~/git_reps/claude/projects/Venko/Akvo_Green` and `.../VenkoDemo` | — | everything |
+| Python 3 | 3.14.4 | config build, dashboard tools |
+| AWS CLI v2, logged in (`aws sts get-caller-identity` works) | 2.37.4 | steps 5–7, 9 |
+| AWS SAM CLI | 1.166.2 | step 6 |
+| SSH client + key (`~/.ssh/id_*.pub`), `rsync` | — | steps 1, 8 |
+| Raspberry Pi Imager | — | step 1 |
+| Optional: `dpkg-deb` and the `Tools/AkvoModbus` repo next to the others | — | AKVO Modbus Tool install (skipped if missing) |
+
+**AWS account and permissions**
+
+- Account `884520769610`, region `us-east-1`.
+- Your AWS user needs to create CloudFormation stacks with IAM roles (`CAPABILITY_IAM`), S3 buckets, IoT certificates/policies/things, Lambda, API Gateway, Firehose, Glue/Athena, DynamoDB, CloudFront and EventBridge. Simplest: an admin user for whoever sets up sites.
+
+**Installed on the Pi automatically** (no action needed)
+
+- By `install.sh`: `python3-venv`, `python3-pip`, `socat`, `i2c-tools`; a Python venv with `pymodbus`, `pyserial`, `psutil`, `awsiotsdk`, `luma.oled`; the services; serial-port access.
+- By `push_site.sh`: the code, the site config, certificates, WiFi profiles and the AKVO Modbus Tool.
+- The Pi needs only Raspberry Pi OS 64-bit (step 1) and internet access during install.
 
 ## Step 1 – Write the SD card
 
