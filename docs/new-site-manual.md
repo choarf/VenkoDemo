@@ -94,6 +94,18 @@ Have everything below ready before step 1; the information in the first table is
 | Raspberry Pi Imager | — | step 1 |
 | Optional: `dpkg-deb` and the `Tools/AkvoModbus` repo next to the others | — | AKVO Modbus Tool install (skipped if missing) |
 
+**Python libraries**
+
+| Where | Libraries (pinned version) | Installed by |
+| --- | --- | --- |
+| Pi – gateway (`gateway/requirements.txt`) | `pymodbus` 3.15.0, `pyserial` 3.5, `psutil` 7.2.2, `awsiotsdk` 1.31.0, `awscrt` 0.36.1 | `install.sh`; `push_site.sh` updates them when the file changes |
+| Pi – OLED, optional (`gateway/requirements-oled.txt`) | `luma.oled` 3.16.0 (+ `Pillow`, `smbus2`) | same |
+| Pi – AKVO Modbus Tool | `customtkinter`, `darkdetect`, `Pillow`, `pymodbus`, `pyserial`, `openpyxl`, `pandas` | `akvo-modbus-setup` (run by `push_site.sh`) |
+| Your computer – VenkoDemo tools and tests | `boto3`, `openpyxl`, `jinja2`, `tzdata`, `pytest` | you: `pip install -r backend/requirements.txt boto3 pytest` in a venv |
+| AWS Lambda | `openpyxl`, `jinja2`, `tzdata` (`backend/requirements.txt`); `boto3` comes with the runtime | `sam build` |
+
+The local dashboard and `config_manager.py` need only the Python standard library.
+
 **AWS account and permissions**
 
 - Account `884520769610`, region `us-east-1`.
