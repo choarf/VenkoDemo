@@ -4,7 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Cloud side + web dashboard for the **Akvo_Green** Raspberry Pi Modbus gateway (sibling repo `../Akvo_Green`, not modified from here). The gateway publishes MQTT to AWS IoT Core; everything else (storage, API, reports, dashboard) lives in this repo. UI text and report text are in Spanish. `README.md` is the authoritative operator guide (deploy, adding sites, sensor changes, troubleshooting) — keep it in sync when behavior changes.
+Cloud side + web dashboard for the **Akvo_Green** Raspberry Pi Modbus gateway (sibling repo `../Akvo_Green`). The gateway publishes MQTT to AWS IoT Core; everything else (storage, API, reports, dashboard) lives in this repo. UI text and report text are in Spanish. `README.md` is the authoritative operator guide (deploy, adding sites, sensor changes, troubleshooting) — keep it in sync when behavior changes.
+
+## Working across both repos
+
+Most changes touch both repos (a new `system.csv` column → `config.json` → this dashboard; site config; deploys). Akvo_Green must be a working directory of the session, or reads/edits there are refused (`blockReadsOutsideWorkingDirectories`):
+
+```
+/add-dir /home/chris/git_reps/claude/projects/Venko/Akvo_Green
+```
+
+It's saved in `.claude/settings.local.json` (`permissions.additionalDirectories`), but a session started from inside Akvo_Green doesn't load this repo's settings - starting `claude` from the parent folder `~/git_reps/claude/projects/Venko` covers both. Commit each repo separately.
 
 ## Commands
 

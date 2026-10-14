@@ -63,7 +63,7 @@ def build(source: dict, overrides: dict) -> dict:
         "source_hash": source.get("meta", {}).get("hash", ""),
         "site": overrides.get("site", {}),
         "groups": overrides.get("groups", []),
-        "gateway": {k: gw.get(k) for k in ("gateway_id", "city", "poll_interval", "system_interval")},
+        "gateway": {k: gw.get(k) for k in ("gateway_id", "client", "city", "poll_interval", "system_interval")},
         "topics": {"data": source.get("aws", {}).get("topic_pub"), "system": source.get("aws", {}).get("topic_system")},
         "sensors": sensors,
     }

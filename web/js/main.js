@@ -69,7 +69,8 @@ async function boot() {
   document.title = cfg.site.title || "Venko Demo";
   $("siteTitle").textContent = cfg.site.title || "Venko Demo";
   $("brand").textContent = cfg.site.brand || "";
-  $("gwInfo").textContent = `Gateway ${cfg.gateway.gateway_id} · ${cfg.sensors.length} sensores · muestreo ${cfg.gateway.poll_interval} s`;
+  $("gwInfo").textContent = (cfg.gateway.client ? `Cliente ${cfg.gateway.client} · ` : "")
+    + `Gateway ${cfg.gateway.gateway_id} · ${cfg.sensors.length} sensores · muestreo ${cfg.gateway.poll_interval} s`;
 
   overview.initOverview(cfg);
   hmi.initHmi(cfg, { onActiveChange: (t) => { active = t; renderMode(); } });

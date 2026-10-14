@@ -111,6 +111,7 @@ function updateKpis(live) {
 function updateSystem(live, cfg) {
   const sys = live.system || {};
   const rows = [
+    ["Cliente", cfg.gateway.client || "—"],
     ["Gateway", sys.gateway || cfg.gateway.gateway_id],
     ["Estado", live.online ? "En línea" : "Sin datos recientes"],
     ["Última lectura", fmtDateTime(live.rx_ms)],
