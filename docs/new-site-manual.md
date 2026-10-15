@@ -216,16 +216,21 @@ Expected: `Loaded N devices` and `Validation successful`.
 
 ## Step 4 – WiFi networks (optional)
 
-The Pi can know two WiFi networks, preferred first; you change them from your computer instead of re-imaging the SD card. Only the SSIDs go in `system.csv` (step 3). The passwords go in `sites/$KEY/wifi.csv`, which is git-ignored like the certificates and never reaches `config.json`:
+The Pi can know two WiFi networks, preferred first; you change them from your computer instead of re-imaging the SD card. Only the SSIDs go in `system.csv` (step 3). The passwords go in `sites/$KEY/wifi.csv` — next to `config_data/`, not inside it — which is git-ignored like the certificates and never reaches `config.json`. Step 3 doesn't copy it; create it from the Akvo_Green root:
+
+```bash
+cp sites/cmd4/wifi.csv sites/$KEY/wifi.csv     # same networks as cmd4: keeps their passwords
+# or start empty for other networks:
+printf 'ssid,password\n' > sites/$KEY/wifi.csv
+chmod 600 sites/$KEY/wifi.csv
+```
+
+Then edit it with a text editor so it has one row per SSID in `system.csv`:
 
 ```csv
 ssid,password
 Planta,your-planta-password
 Oficina,your-oficina-password
-```
-
-```bash
-chmod 600 sites/$KEY/wifi.csv
 ```
 
 - One row per SSID in `system.csv`; an empty password means an open network.
@@ -244,7 +249,7 @@ aws iot create-keys-and-certificate --set-as-active \
   --query certificateArn --output text > cert.arn
 cp ../../cmd4/certs/AmazonRootCA1.pem .
 cat > policy.json <<JSON
-{ "Version": "2012-10-17", "Statement": [
+{ "Version": "2012-10-17", "tatement": [
   { "Effect": "Allow", "Action": "iot:Connect", "Resource": "arn:aws:iot:us-east-1:$ACCT:client/$CLIENT" },
   { "Effect": "Allow", "Action": "iot:Publish", "Resource": "arn:aws:iot:us-east-1:$ACCT:topic/VENKO/$KEY/*" } ] }
 JSON
