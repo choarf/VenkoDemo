@@ -74,7 +74,7 @@ Have everything below ready before step 1; the information in the first table is
 | RS-485 cabling | Twisted pair A/B plus GND reference; 120 Ω termination at both ends of the line |
 | Sensor power supply, 12 V | Separate from the Pi; for a bus like cmd4's (7 devices, one with a UV lamp and wiper) 2.5–3 A |
 | Network | Ethernet cable or WiFi coverage at the cabinet |
-| Optional: 1.54" I2C OLED (SSD1309), monitor + HDMI cable, keyboard/mouse | The monitor needs its own 5 V 3 A supply, never a Pi USB port |
+| Optional: 1.54" 128×64 I2C OLED (sold as SSD1309; often really SH1106), monitor + HDMI cable, keyboard/mouse | The monitor needs its own 5 V 3 A supply, never a Pi USB port |
 
 **Network access from the Pi**
 
@@ -170,7 +170,7 @@ AKVO_plant5,America/Mexico_City,20,60,120,1,30,1,8080,Planta,Oficina
 - `gateway_id` = `$CLIENT`. `poll_interval` = seconds between sensor reads.
 - `database_enabled=1` keeps a local history on the Pi; `web_enabled=1` serves it at `http://<pi>:8080`.
 - `wifi1_ssid` / `wifi2_ssid` = WiFi networks to join, preferred first (step 4). Leave the columns out for none.
-- Optional OLED: add `display_enabled,display_driver,display_address` = `1,ssd1309,0x3C`.
+- Optional OLED: its settings go in their own file, `display.csv` (below), not in `system.csv`.
 
 **`modbus.csv`** – the RS-485 bus:
 
@@ -205,6 +205,16 @@ a2zzu55sjawy4x-ats.iot.us-east-1.amazonaws.com,AKVO_plant5,./certs/AmazonRootCA1
 
 - `host` is the same for every site; keep the three cert paths as they are.
 - Leave `dashboard_url` empty until step 6 gives it.
+
+**`display.csv`** – optional, only with an OLED wired (no file = display off):
+
+```csv
+enabled,driver,address,column_offset,font,sensor_repeats
+1,sh1106,0x3C,3,3x5,2
+```
+
+- Find `driver` (and for `sh1106` the `column_offset`) on the Pi with `tools/oled_test.py`; the 1.54" boards sold as SSD1309 have been SH1106 with offset 3.
+- To tune the screens, open the simulator on the site: `python3 tools/oled_sim.py $KEY` (after the build below). Its **Exportar display.csv** writes this file; all columns are in `docs/edge_node_config/CONFIGURATION.md`.
 
 Build and validate:
 
@@ -354,7 +364,7 @@ ssh -t pi@192.168.68.140 'cd Akvo_Green && ./install.sh --skip-certs && sudo sys
 | Extra | How |
 | --- | --- |
 | Dashboard full screen at boot | `ssh pi@<pi> 'cd Akvo_Green && tools/setup_kiosk.sh'` (`--window` for a normal window, `--off` to remove) |
-| OLED status screen | `display_enabled=1` in `system.csv` + I2C on (step 2), rebuild, push |
+| OLED status screen | `display.csv` with `enabled=1` + I2C on (step 2), rebuild, push |
 | AKVO Modbus Tool | On the Pi's desktop or VNC: `sudo systemctl stop akvo-green`, then `akvo-modbus`; start `akvo-green` again when done |
 
 ## Step 9 – Check and record
