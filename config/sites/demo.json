@@ -11,7 +11,10 @@
     "mg/L": "mg/L",
     "NTU": "NTU",
     "uc/cm": "µS/cm",
-    "uS/cm": "µS/cm"
+    "uS/cm": "µS/cm",
+    "0.1 °C": "0.1 °C",
+    "0.1 %HR": "0.1 %HR",
+    "Mpa": "MPa"
   },
   "defaults": {
     "warn_margin": 0.1,
@@ -20,76 +23,32 @@
   "groups": [
     "Temperatura",
     "Ambiente",
-    "Química",
-    "Conductividad"
+    "Presión"
   ],
   "sensors": {
-    "DEV_1.Pt100Sensor": {
-      "label": "Temperatura Pt100",
+    "DEV_2.TempAgua": {
+      "label": "Temperatura agua",
       "group": "Temperatura",
-      "decimals": 1
-    },
-    "DEV_2.Ambient": {
-      "label": "Temp. ambiente",
-      "group": "Ambiente",
-      "decimals": 1
-    },
-    "DEV_3.Humedad": {
-      "label": "Humedad",
-      "group": "Ambiente",
-      "decimals": 1
-    },
-    "DEV_4.ORPSensor": {
-      "label": "ORP",
-      "group": "Química",
       "decimals": 0
     },
-    "DEV_5.PhSensor": {
-      "label": "pH",
-      "group": "Química"
+    "DEV_3.TempAmb": {
+      "label": "Temperatura ambiente",
+      "group": "Ambiente",
+      "decimals": 0
     },
-    "DEV_6.TempPhSensor": {
-      "label": "Temp. pH",
-      "group": "Temperatura",
-      "decimals": 1
+    "DEV_3.HumAmb": {
+      "label": "Humedad ambiente",
+      "group": "Ambiente",
+      "decimals": 0
     },
-    "DEV_7.DOSensor": {
-      "label": "Oxígeno disuelto",
-      "group": "Química"
+    "DEV_4.Presion1": {
+      "label": "Presión 1",
+      "group": "Presión",
+      "decimals": 0
     },
-    "DEV_8.CODSensor": {
-      "label": "DQO (COD)",
-      "group": "Química"
-    },
-    "DEV_9.TempCODSensor": {
-      "label": "Temp. DQO",
-      "group": "Temperatura",
-      "decimals": 1
-    },
-    "DEV_10.TurbCODSensort": {
-      "label": "Turbidez",
-      "group": "Química"
-    },
-    "DEV_11.BODSensor": {
-      "label": "DBO (BOD)",
-      "group": "Química"
-    },
-    "DEV_12.TOCSensor": {
-      "label": "COT (TOC)",
-      "group": "Química"
-    },
-    "DEV_13.CondSensor": {
-      "label": "Conductividad",
-      "group": "Conductividad"
-    },
-    "DEV_14.TempCondSensor": {
-      "label": "Temp. conductividad",
-      "group": "Temperatura",
-      "decimals": 1
-    },
-    "DEV_15.TDSCondSensor": {
-      "label": "TDS",
-      "group": "Conductividad",
+    "DEV_5.Presion2": {
+      "label": "Presión 2",
+      "group": "Presión",
       "decimals": 0
     }
   }
