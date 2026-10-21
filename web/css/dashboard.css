@@ -12,6 +12,7 @@
   --bad: #D50000;
   --ok: #2e7d32;
   --gauge-track: #e5e9f1;
+  --bg-wash: rgba(238,243,248,.55);
 }
 .dark {
   --bg: #17191d;
@@ -20,10 +21,12 @@
   --muted: #9aa3b2;
   --line: #41464f;
   --gauge-track: #3a3f47;
+  --bg-wash: rgba(23,25,29,.82);
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; color: var(--fg);
+  background: linear-gradient(var(--bg-wash), var(--bg-wash)), url("../img/background.jpg") center / cover fixed, var(--bg); }
 [hidden] { display: none !important; }
 
 .layout { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
