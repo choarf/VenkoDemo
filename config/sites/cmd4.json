@@ -1,55 +1,73 @@
 {
   "site": {
-    "title": "Venko Demo – Cmd4",
+    "title": "Venko-Keken",
     "brand": "Ghotrix - Semca"
   },
   "units": {
+    "psi": "psi",
+    "gpm": "gpm",
     "°C": "°C",
-    "%HR": "%HR",
-    "mV": "mV",
-    "unit": "pH",
-    "mg/L": "mg/L",
-    "NTU": "NTU",
-    "uc/cm": "µS/cm",
-    "uS/cm": "µS/cm",
-    "0.1 °C": "0.1 °C",
-    "0.1 %HR": "0.1 %HR",
-    "Mpa": "MPa"
+    "%HR": "%HR"
   },
   "defaults": {
     "warn_margin": 0.1,
     "decimals": 2
   },
   "groups": [
-    "Temperatura",
-    "Ambiente",
-    "Presión"
+    "Presión",
+    "Flujo",
+    "Ambiente"
   ],
   "sensors": {
-    "DEV_2.TempAgua": {
-      "label": "Temperatura agua",
-      "group": "Temperatura",
-      "decimals": 1
-    },
-    "DEV_3.TempAmb": {
-      "label": "Temperatura ambiente",
-      "group": "Ambiente",
-      "decimals": 1
-    },
-    "DEV_3.HumAmb": {
-      "label": "Humedad ambiente",
-      "group": "Ambiente",
-      "decimals": 1
-    },
-    "DEV_4.Presion1": {
-      "label": "Presión 1",
+    "DEV_1.P1_pre_filtro": {
+      "label": "P1 pre filtro",
       "group": "Presión",
       "decimals": 0
     },
-    "DEV_5.Presion2": {
-      "label": "Presión 2",
+    "DEV_2.P2_pos_filtro": {
+      "label": "P2 pos filtro",
       "group": "Presión",
       "decimals": 0
+    },
+    "DEV_3.P3_pre_membranas": {
+      "label": "P3 pre membranas",
+      "group": "Presión",
+      "decimals": 0
+    },
+    "DEV_4.P4_pos_membranas": {
+      "label": "P4 pos membranas",
+      "group": "Presión",
+      "decimals": 0
+    },
+    "DEV_5.P5_presion_de_rechazo": {
+      "label": "P5 presión de rechazo",
+      "group": "Presión",
+      "decimals": 0
+    },
+    "DEV_6.Fj1_flujo_de_alimentacion": {
+      "label": "Fj1 flujo de alimentación",
+      "group": "Flujo",
+      "decimals": 0
+    },
+    "DEV_7.Fj2_flujo_de_permeado": {
+      "label": "Fj2 flujo de permeado",
+      "group": "Flujo",
+      "decimals": 0
+    },
+    "DEV_8.Fj3_flujo_de_rechazo": {
+      "label": "Fj3 flujo de rechazo",
+      "group": "Flujo",
+      "decimals": 0
+    },
+    "DEV_50.T1-Temp-Amb": {
+      "label": "T1 temperatura ambiente",
+      "group": "Ambiente",
+      "decimals": 1
+    },
+    "DEV_51.H1-Humedad-Amb": {
+      "label": "H1 humedad ambiente",
+      "group": "Ambiente",
+      "decimals": 1
     }
   }
 }
