@@ -356,7 +356,8 @@ ssh -t pi@192.168.68.140 'cd Akvo_Green && ./install.sh --skip-certs && sudo sys
 
 - `push_site.sh` copies the code, the site's `config.json`, the certificates (with `--certs`), the WiFi profiles and the AKVO Modbus Tool. It asks for the Pi's sudo password for the WiFi step.
 - `install.sh` sets up packages, the Python venv, serial-port access and the services `akvo-green` and `akvo-history-web` (and `akvo-oled`).
-- **Every later change** is the same push without `--certs`: edit the CSVs, rebuild (step 3), `tools/push_site.sh $KEY pi@<pi>`. The gateway reloads `config.json` within 5 s.
+- The first push also **registers the Pi**: it writes `sites/$KEY/pi.csv` (hostname, user, serial number, MAC; commit it) and renames the Pi to `$KEY`, so it's reachable as `$KEY.local` (e.g. `http://$KEY.local:8080`) whatever IP the router gives it. Every later push checks the serial and refuses to push this site to any other Pi; if the site really moves to new hardware, push once with `--new-hw`.
+- **Every later change** is the same push without `--certs` and without an address: edit the CSVs, rebuild (step 3), `tools/push_site.sh $KEY`. It finds the Pi as `$KEY.local`, or else at the IP the gateway last reported to AWS. The gateway reloads `config.json` within 5 s.
 - Push to the right Pi: pushing one site's config to another site's Pi makes that Pi publish under the wrong name and stops its own site.
 
 **Optional extras on the Pi**
