@@ -29,17 +29,17 @@
     "DEV_2.TempAgua": {
       "label": "Temperatura agua",
       "group": "Temperatura",
-      "decimals": 0
+      "decimals": 1
     },
     "DEV_3.TempAmb": {
       "label": "Temperatura ambiente",
       "group": "Ambiente",
-      "decimals": 0
+      "decimals": 1
     },
     "DEV_3.HumAmb": {
       "label": "Humedad ambiente",
       "group": "Ambiente",
-      "decimals": 0
+      "decimals": 1
     },
     "DEV_4.Presion1": {
       "label": "Presión 1",
