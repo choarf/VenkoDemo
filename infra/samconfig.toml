@@ -44,3 +44,16 @@ image_repositories = []
 
 [akvo01005.global.parameters]
 region = "us-east-1"
+[akvo01002.deploy.parameters]
+stack_name = "venko-akvo01002"
+tags = "Project=\"Venko\" Site=\"akvo01002\" Client=\"Ghotrix\""
+resolve_s3 = true
+s3_prefix = "venko-akvo01002"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "DataTopic=\"VENKO/akvo01002/data\" SystemTopic=\"VENKO/akvo01002/system\" PartitionStartDate=\"2026-10-24\" AllowedOrigin=\"https://dcjm9hzmbcx07.cloudfront.net\" ReportTimezone=\"America/Mexico_City\" GlueDatabaseName=\"venko_akvo01002\" DataBucketName=\"venko-akvo01002-884520769610-us-east-1\" WebBucketName=\"venko-akvo01002-web-884520769610\""
+image_repositories = []
+
+[akvo01002.global.parameters]
+region = "us-east-1"

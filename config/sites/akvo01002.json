@@ -1,0 +1,104 @@
+{
+  "site": {
+    "title": "Venko Demo – Akvo01002",
+    "brand": "Ghotrix"
+  },
+  "units": {
+    "°C": "°C",
+    "%HR": "%HR",
+    "mV": "mV",
+    "unit": "pH",
+    "mg/L": "mg/L",
+    "NTU": "NTU",
+    "uc/cm": "µS/cm",
+    "uS/cm": "µS/cm"
+  },
+  "defaults": {
+    "warn_margin": 0.1,
+    "decimals": 2
+  },
+  "groups": [
+    "Temperatura",
+    "Ambiente",
+    "Química",
+    "Orgánicos",
+    "Conductividad"
+  ],
+  "sensors": {
+    "DEV_1.Pt100Sensor": {
+      "label": "Temperatura agua (Pt100)",
+      "group": "Temperatura",
+      "decimals": 1
+    },
+    "DEV_2.Ambient": {
+      "label": "Temperatura ambiente",
+      "group": "Ambiente",
+      "decimals": 1
+    },
+    "DEV_3.Humedad": {
+      "label": "Humedad ambiente",
+      "group": "Ambiente",
+      "decimals": 1
+    },
+    "DEV_4.ORPSensor": {
+      "label": "ORP",
+      "group": "Química",
+      "decimals": 0
+    },
+    "DEV_5.PhSensor": {
+      "label": "pH",
+      "group": "Química",
+      "decimals": 2
+    },
+    "DEV_6.TempPhSensor": {
+      "label": "Temperatura pH",
+      "group": "Temperatura",
+      "decimals": 1
+    },
+    "DEV_7.DOSensor": {
+      "label": "Oxígeno disuelto",
+      "group": "Química",
+      "decimals": 2
+    },
+    "DEV_8.CODSensor": {
+      "label": "DQO",
+      "group": "Orgánicos",
+      "decimals": 1
+    },
+    "DEV_9.TempCODSensor": {
+      "label": "Temperatura DQO",
+      "group": "Temperatura",
+      "decimals": 1
+    },
+    "DEV_10.TurbCODSensort": {
+      "label": "Turbidez",
+      "group": "Orgánicos",
+      "decimals": 1
+    },
+    "DEV_11.BODSensor": {
+      "label": "DBO",
+      "group": "Orgánicos",
+      "decimals": 1
+    },
+    "DEV_12.TOCSensor": {
+      "label": "COT",
+      "group": "Orgánicos",
+      "decimals": 1
+    },
+    "DEV_13.CondSensor": {
+      "label": "Conductividad",
+      "group": "Conductividad",
+      "decimals": 1
+    },
+    "DEV_14.TempCondSensor": {
+      "label": "Temperatura conductividad",
+      "group": "Temperatura",
+      "decimals": 1
+    },
+    "DEV_15.TDSCondSensor": {
+      "label": "Sólidos disueltos (TDS)",
+      "group": "Conductividad",
+      "decimals": 0
+    }
+  }
+}
