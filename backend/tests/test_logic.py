@@ -209,3 +209,8 @@ def test_password_hash_verify_and_token():
         sysauth.check_token(token, sysauth.hash_password("otra-clave-9", iterations=1000), now=2000)  # changed
     with pytest.raises(ValueError):
         sysauth.hash_password("corta")
+
+
+def test_system_history_sql_buckets_by_time():
+    sql = queries.system_history(T0, T0 + 86_400_000, 900_000)
+    assert "(rx_ms / 900000) * 900000 AS t" in sql and "avg(ram_usage_percent) AS ram" in sql and "GROUP BY 1" in sql

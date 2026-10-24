@@ -192,7 +192,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json({"now_ms": now, "system": system_report()})
         if (method, path) == ("GET", "/system/stats"):
             frm = now - 86_400_000 if not q.get("from") else frm
-            return self._json({"from_ms": frm, "to_ms": now, "samples": 4320,
+            pts = range(frm - frm % 900_000, now, 900_000)
+            series = {"cpu": [[t, round(10 + 6 * math.sin(t / 7_200_000) + random.random() * 3, 1)] for t in pts],
+                      "ram": [[t, round(40 + 2 * math.sin(t / 20_000_000), 1)] for t in pts], "disk": [[t, 84.0] for t in pts]}
+            return self._json({"from_ms": frm, "to_ms": now, "samples": 4320, "bucket_ms": 900_000, "series": series,
                                "cpu": {"min": 7.0, "avg": 12.4, "max": 23.0}, "ram": {"min": 39.0, "avg": 41.2, "max": 44.0},
                                "disk": {"min": 83.0, "avg": 83.6, "max": 84.0}})
         if (method, path) == ("GET", "/history"):

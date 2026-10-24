@@ -87,17 +87,17 @@ function render() {
     ["Página local", sys.hostname ? `http://${sys.hostname}.local:8080` : null],
   ]);
 
-  $("sysResources").replaceChildren(...RES.map(([name, label, field]) => {
-    const v = sys[field];
-    const st = resState(name, v);
-    const s = stats?.[name];
-    const range = s && s.min !== null ? `24 h: mín. ${fmtNum(s.min, 0)} % · prom. ${fmtNum(s.avg, 0)} % · máx. ${fmtNum(s.max, 0)} %`
+  buildResources();
+  for (const [name, label, field] of RES) {
+    const c = resCards[name], v = sys[field], st = resState(name, v), s = stats?.[name];
+    c.card.className = `rcard ${st}`;
+    c.card.setAttribute("aria-label", `${label} ${v ?? "sin dato"} %, ${STATE_TEXT[st]}`);
+    c.tag.className = `tag ${st}`;
+    c.tag.textContent = STATE_TEXT[st];
+    c.value.textContent = v === null || v === undefined ? "—" : fmtNum(v, 0);
+    c.range.textContent = s && s.min !== null ? `24 h: mín. ${fmtNum(s.min, 0)} % · prom. ${fmtNum(s.avg, 0)} % · máx. ${fmtNum(s.max, 0)} %`
       : stats ? "24 h: sin datos" : "24 h: consultando…";
-    return el("div", { class: `rcard ${st}`, role: "group", "aria-label": `${label} ${v ?? "sin dato"} %, ${STATE_TEXT[st]}` },
-      el("div", { class: "mcard-h" }, el("b", { class: "rname" }, label), el("span", { class: `tag ${st}` }, STATE_TEXT[st])),
-      el("div", { class: "rval" }, el("b", {}, v === null || v === undefined ? "—" : fmtNum(v, 0)), el("span", { class: "muted" }, "%")),
-      el("span", { class: "muted small" }, range));
-  }));
+  }
   const lim = RES.map(([n, label]) => [label, cfg.system_limits?.[n] || [80, 90]]);
   $("sysLimitsNote").textContent = lim.every(([, l]) => l.join() === lim[0][1].join())
     ? `Marco amarillo desde ${lim[0][1][0]} %, rojo desde ${lim[0][1][1]} %`
@@ -122,6 +122,55 @@ function render() {
       sys.oled_enabled ? true : null, sys.oled_enabled === false ? "Desactivada en la configuración del sitio" : null, null));
 }
 
+// Resource cards are built once and updated in place, so the CPU / RAM charts aren't
+// redrawn on every 10 s refresh - only when new stats arrive (every 5 min).
+const CHARTED = ["cpu", "ram"];
+let resCards = null;
+const resCharts = {};
+
+function buildResources() {
+  if (resCards) return;
+  resCards = {};
+  $("sysResources").replaceChildren(...RES.map(([name, label]) => {
+    const c = {
+      tag: el("span", { class: "tag none" }, "—"),
+      value: el("b", {}, "—"),
+      range: el("span", { class: "muted small" }, ""),
+      chart: CHARTED.includes(name) ? el("div", { class: "rchart", role: "img", "aria-label": `${label}, últimas 24 h` }) : null,
+    };
+    c.card = el("div", { class: "rcard", role: "group" },
+      el("div", { class: "mcard-h" }, el("b", { class: "rname" }, label), c.tag),
+      el("div", { class: "rval" }, c.value, el("span", { class: "muted" }, "%")),
+      c.chart, c.range);
+    resCards[name] = c;
+    return c.card;
+  }));
+}
+
+function drawResourceCharts() {
+  if (!resCards || !stats?.series) return;
+  const css = (v) => getComputedStyle(document.body).getPropertyValue(v).trim();
+  for (const name of CHARTED) {
+    resCharts[name]?.destroy();
+    const [warn, alarm] = cfg.system_limits?.[name] || [80, 90];
+    const data = stats.series[name] || [];
+    const top = Math.max(alarm, ...data.map((p) => p[1]));
+    resCharts[name] = Highcharts.chart(resCards[name].chart, {
+      chart: { type: "area", height: 90, spacing: [4, 0, 2, 0], animation: false, backgroundColor: "transparent" },
+      title: { text: null }, legend: { enabled: false }, credits: { enabled: false }, exporting: { enabled: false },
+      xAxis: { type: "datetime", lineWidth: 0, tickLength: 0, labels: { style: { fontSize: "10px" } } },
+      yAxis: { min: 0, max: Math.min(100, Math.ceil(top / 10) * 10), title: { text: null }, tickAmount: 3,
+        labels: { format: "{value} %", style: { fontSize: "10px" } },
+        plotLines: [{ value: warn, color: css("--warn"), width: 1, dashStyle: "Dash", zIndex: 3 },
+                    { value: alarm, color: css("--bad"), width: 1, dashStyle: "Dash", zIndex: 3 }] },
+      tooltip: { valueDecimals: 1, valueSuffix: " %", xDateFormat: "%d-%b %H:%M" },
+      plotOptions: { area: { marker: { enabled: false }, lineWidth: 2, fillOpacity: 0.15, color: css("--accent"), threshold: 0 } },
+      lang: { noData: "Sin datos de 24 h" },
+      series: [{ name: name === "cpu" ? "CPU" : "RAM", data }],
+    });
+  }
+}
+
 /** GET /system (and /system/stats every 5 min) with the token; a 401 locks the view again. */
 async function refresh() {
   const token = getToken();
@@ -133,8 +182,11 @@ async function refresh() {
     if (Date.now() - statsAt >= STATS_TTL_MS) {
       statsAt = Date.now();
       stats = await api.systemStats(token).catch((e) => { if (e.status === 401) throw e; statsAt = 0; return null; });
+      render();
+      drawResourceCharts();
+    } else {
+      render();
     }
-    render();
   } catch (err) {
     if (err.status === 401) showLocked("La sesión de Sistema expiró. Escribe la contraseña de nuevo.");
     else $("sysLoginMsg").textContent = `Error: ${err.message}`;
@@ -143,6 +195,7 @@ async function refresh() {
 
 export function initSystem(config) {
   cfg = config;
+  document.addEventListener("themechange", drawResourceCharts);
   $("sysLoginForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = e.target, btn = f.querySelector("button");

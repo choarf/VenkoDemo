@@ -45,11 +45,12 @@ def test_system_stats_defaults_to_24h_and_parses_numbers():
     stored = sysauth.hash_password("clave-sistema", iterations=1000)
     token, _ = sysauth.make_token(stored)
     with mock.patch.object(data.ddb, "system_password_hash", return_value=stored), \
-         mock.patch.object(data.athena, "run", return_value=[row]):
+         mock.patch.object(data.athena, "run", side_effect=[[row], [{"t": "1000", "cpu": "5.5", "ram": "30", "disk": None}]]):
         status, body = call("GET", "/system/stats", headers={"X-System-Token": token})
     assert status == 200 and body["to_ms"] - body["from_ms"] == 24 * 3_600_000
     assert body["samples"] == 4320 and body["cpu"] == {"min": 7.1, "avg": 12.5, "max": 23.0}
     assert body["disk"] == {"min": None, "avg": None, "max": None}
+    assert body["series"] == {"cpu": [[1000, 5.5]], "ram": [[1000, 30.0]], "disk": []}
 
 
 CFG = {"gateway": {"poll_interval": 20, "city": "America/Mexico_City"},

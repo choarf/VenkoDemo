@@ -162,3 +162,15 @@ def system_stats(from_ms: int, to_ms: int) -> str:
         f"FROM {settings.SYSTEM_TABLE} WHERE dt BETWEEN '{lo}' AND '{hi}' "
         f"AND rx_ms >= {int(from_ms)} AND rx_ms < {int(to_ms)}"
     )
+
+
+def system_history(from_ms: int, to_ms: int, bucket_ms: int) -> str:
+    """CPU / RAM / disk averages per time bucket (Sistema view charts)."""
+    lo, hi = timeutil.dt_bounds(from_ms, to_ms)
+    b = int(bucket_ms)
+    return (
+        f"SELECT (rx_ms / {b}) * {b} AS t, avg(cpu_load_percent) AS cpu, avg(ram_usage_percent) AS ram, "
+        "avg(disk_usage_percent) AS disk "
+        f"FROM {settings.SYSTEM_TABLE} WHERE dt BETWEEN '{lo}' AND '{hi}' "
+        f"AND rx_ms >= {int(from_ms)} AND rx_ms < {int(to_ms)} GROUP BY 1 ORDER BY 1"
+    )

@@ -202,4 +202,12 @@ def get_system_stats(req):
     rows = athena.run(queries.system_stats(from_ms, to_ms))
     r = rows[0] if rows else {}
     stats = {n: {s: athena.num(r.get(f"{n}_{s}")) for s in ("min", "avg", "max")} for n in ("cpu", "ram", "disk")}
-    return {"from_ms": from_ms, "to_ms": to_ms, "samples": int(r.get("samples") or 0), **stats}
+    # Charts: averages per bucket (15 min for 24 h).
+    bucket_ms = timeutil.pick_bucket_ms(from_ms, to_ms, 96)
+    series = {"cpu": [], "ram": [], "disk": []}
+    for h in athena.run(queries.system_history(from_ms, to_ms, bucket_ms)):
+        for n in series:
+            if h.get(n) not in (None, ""):
+                series[n].append([int(h["t"]), athena.num(h[n])])
+    return {"from_ms": from_ms, "to_ms": to_ms, "samples": int(r.get("samples") or 0), "bucket_ms": bucket_ms,
+            "series": series, **stats}
