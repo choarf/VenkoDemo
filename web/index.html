@@ -196,6 +196,18 @@
     </section>
     <!-- ============ System ============ -->
     <section class="view" id="view-system" hidden>
+      <div class="card login-card" id="sysLogin" hidden>
+        <h3>Sistema protegido</h3>
+        <p class="muted small">Los datos del equipo, la red y las conexiones requieren la contraseña de Sistema de este sitio.</p>
+        <form id="sysLoginForm" autocomplete="on">
+          <input type="text" name="username" value="sistema" autocomplete="username" hidden>
+          <label>Contraseña<input type="password" name="password" autocomplete="current-password" required minlength="8"></label>
+          <button class="btn" type="submit">Entrar</button>
+        </form>
+        <p class="muted small" id="sysLoginMsg" role="status"></p>
+      </div>
+      <div class="view" id="sysContent" hidden>
+      <div class="sys-bar"><span class="muted small">Sesión de Sistema abierta en esta pestaña</span><button class="ghost" id="sysLogout" type="button">Salir</button></div>
       <div class="kpis" id="sysKpis" aria-label="Estado"></div>
       <div class="grid-2">
         <div class="card"><h3>Gateway</h3><div class="tbl"><table class="kv" id="sysGateway"></table></div></div>
@@ -208,6 +220,7 @@
       <div class="card">
         <h3>Conexiones</h3>
         <div class="lgrid" id="sysLinks"></div>
+      </div>
       </div>
     </section>
   </main>

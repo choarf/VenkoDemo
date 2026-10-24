@@ -3,7 +3,7 @@ import json
 import logging
 import re
 
-from common import athena, ddb, settings
+from common import athena, ddb, settings, sysauth
 
 from . import data, reports, testruns
 
@@ -19,6 +19,8 @@ ROUTES = [
     ("GET", r"/alarms", data.get_alarms),
     ("GET", r"/alarms/export", data.get_alarms_export),
     ("GET", r"/export", data.get_export),
+    ("POST", r"/system/login", data.system_login),
+    ("GET", r"/system", data.get_system),
     ("GET", r"/system/stats", data.get_system_stats),
     ("GET", r"/tests", testruns.list_tests),
     ("GET", r"/tests/active", testruns.get_active),
@@ -40,6 +42,7 @@ class Request:
         self.method = event.get("httpMethod", "GET")
         self.path = event.get("path") or "/"
         self.query = event.get("queryStringParameters") or {}
+        self.headers = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
         raw = event.get("body") or ""
         try:
             self.body = json.loads(raw) if raw else {}
@@ -53,7 +56,7 @@ def _resp(status: int, payload) -> dict:
         "headers": {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": settings.ALLOWED_ORIGIN,
-            "Access-Control-Allow-Headers": "Content-Type,X-Api-Key",
+            "Access-Control-Allow-Headers": "Content-Type,X-Api-Key,X-System-Token",
             "Cache-Control": "no-store",
         },
         "body": json.dumps(payload, default=str),
@@ -72,6 +75,8 @@ def handler(event, _context):
         return _resp(404, {"error": f"no route {req.method} {req.path}"})
     except (ValueError, KeyError) as e:
         return _resp(400, {"error": str(e)})
+    except sysauth.Unauthorized as e:
+        return _resp(401, {"error": str(e)})
     except ddb.NotFound as e:
         return _resp(404, {"error": f"not found: {e}"})
     except ddb.Conflict as e:

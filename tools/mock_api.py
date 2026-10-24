@@ -58,15 +58,23 @@ def live():
                            "unit": s["unit"], "min": s["min"], "max": s["max"]})
     now = timeutil.now_ms()
     return {"now_ms": now, "rx_ms": t, "age_s": round((now - t) / 1000, 1), "online": True, "values": values,
-            "alarms": alarms, "system": {
-                "gateway": CFG["gateway"]["gateway_id"], "city_time": timeutil.local_str(now, CFG["gateway"]["city"]),
-                "platform_type": "Raspberry Pi (MOCK)", "os": "Linux 6.6", "ip_address": "192.168.10.12",
-                "cpu_load_percent": 12 + random.random() * 8, "ram_usage_percent": 41.3, "disk_usage_percent": 84.0,
-                "hostname": "cmd4", "hw_model": "Raspberry Pi Compute Module 5 Rev 1.0 (MOCK)", "hw_serial": "a011e469c0bed714",
-                "uptime_s": 3 * 86400 + 4 * 3600, "mqtt_since": now / 1000 - 5 * 3600, "oled_enabled": False,
-                "wifi": {"ssid": "Vocho", "profile": "akvo-wifi1", "signal": 72},
-                "modbus": {"connected": True, "port": None, "baudrate": None, "simulated": True},
-                "rx_ms": now - 30_000}}
+            "alarms": alarms, "system_rx_ms": now - 30_000}
+
+
+MOCK_PASSWORD, MOCK_TOKEN = "mock-sistema", "mock-token"
+
+
+def system_report():
+    now = timeutil.now_ms()
+    return {
+        "gateway": CFG["gateway"]["gateway_id"], "city_time": timeutil.local_str(now, CFG["gateway"]["city"]),
+        "platform_type": "Raspberry Pi (MOCK)", "os": "Linux 6.6", "ip_address": "192.168.10.12",
+        "cpu_load_percent": 12 + random.random() * 8, "ram_usage_percent": 41.3, "disk_usage_percent": 84.0,
+        "hostname": "cmd4", "hw_model": "Raspberry Pi Compute Module 5 Rev 1.0 (MOCK)", "hw_serial": "a011e469c0bed714",
+        "uptime_s": 3 * 86400 + 4 * 3600, "mqtt_since": now / 1000 - 5 * 3600, "oled_enabled": False,
+        "wifi": {"ssid": "Vocho", "profile": "akvo-wifi1", "signal": 72},
+        "modbus": {"connected": True, "port": None, "baudrate": None, "simulated": True},
+        "rx_ms": now - 30_000}
 
 
 def history(from_ms, to_ms, keys, bucket_ms):
@@ -174,6 +182,14 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(CFG)
         if (method, path) == ("GET", "/live"):
             return self._json(live())
+        if (method, path) == ("POST", "/system/login"):
+            if body.get("password") != MOCK_PASSWORD:
+                return self._json({"error": "contraseña incorrecta"}, 401)
+            return self._json({"token": MOCK_TOKEN, "expires_ms": now + 12 * 3_600_000})
+        if path.startswith("/system") and self.headers.get("X-System-Token") != MOCK_TOKEN:
+            return self._json({"error": "falta la contraseña de Sistema"}, 401)
+        if (method, path) == ("GET", "/system"):
+            return self._json({"now_ms": now, "system": system_report()})
         if (method, path) == ("GET", "/system/stats"):
             frm = now - 86_400_000 if not q.get("from") else frm
             return self._json({"from_ms": frm, "to_ms": now, "samples": 4320,

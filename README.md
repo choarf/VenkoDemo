@@ -21,7 +21,7 @@ What the dashboard does:
 | **Alarmas** | Active alarms; for 24 h / 7 d / 30 d: totals (alarms, warnings, read errors), the sensor with most events, events per day, the episode table (click a row to see the sensor around the event) and Excel export. |
 | **Históricos** | Any time range + any sensors → chart (one axis per unit, warning/alarm lines) and a per-sensor summary (min/avg/max/last, readings in warning or alarm); export to Excel or CSV. |
 | **Reportes** | Test reports (created on Stop) and weekly reports, as HTML (printable to PDF) and Excel, with the process indicators' averages. |
-| **Sistema** | Gateway and hardware data, CPU / RAM / disk against `system_limits` with their 24 h min/avg/max, connections (AWS, Modbus, WiFi, OLED), uptime. |
+| **Sistema** (password) | Gateway and hardware data, CPU / RAM / disk against `system_limits` with their 24 h min/avg/max, connections (AWS, Modbus, WiFi, OLED), uptime. |
 
 The layout follows `docs/propuesta-tablero/` (navy header band with tabs, light theme with the water-waves background; **Fondo** switches to the dark theme). It adapts to desktop, tablet and phone: dials become bars and tables become one card per row on narrow screens.
 
@@ -217,7 +217,16 @@ The test report covers the test window and includes: per-sensor statistics (samp
 In **Históricos**, pick a range (or 1 h / 6 h / 24 h / 7 d), choose sensors in the **Sensores** drop-down, then click **Consultar**. Points are averaged per bucket, sized automatically for the range. Below the chart, **Resumen del rango** shows each sensor's min / average / max / last value and how many readings were in warning or alarm. **Excel** / **CSV** exports the same range. Ranges are limited to 31 days.
 
 ### System
-**Sistema** shows the gateway (client, id, last reading, local time, sampling), the hardware (model, serial, hostname, IP, OS), CPU / RAM / disk with a yellow / red frame at the site's `system_limits` (default 80 % / 90 %) and their min / avg / max over the last 24 h, and the connections: AWS (since when), Modbus (port or simulated), WiFi (network, profile `akvo-wifi1`/`2`, signal; *No se usa* on a wired Pi) and the OLED. Uptime, WiFi, Modbus and OLED come from gateway code of 2026-10-23 or later; an older Pi shows "—".
+**Sistema** asks for the site's **Sistema password** first; the session lasts 12 h in that browser tab (**Salir** ends it). Set or change the password - only a salted PBKDF2 hash is stored, in the site's DynamoDB table; changing it signs everyone out:
+
+```bash
+python3 tools/set_system_password.py <key>              # asks twice (run it in your own terminal)
+python3 tools/set_system_password.py <key> --generate   # random one, printed once
+```
+
+Until a site has one, Sistema answers "Sistema sin contraseña". `/live` no longer carries the system report; Resumen's short card shows only gateway, status and report times.
+
+It then shows the gateway (client, id, last reading, local time, sampling), the hardware (model, serial, hostname, IP, OS), CPU / RAM / disk with a yellow / red frame at the site's `system_limits` (default 80 % / 90 %) and their min / avg / max over the last 24 h, and the connections: AWS (since when), Modbus (port or simulated), WiFi (network, profile `akvo-wifi1`/`2`, signal; *No se usa* on a wired Pi) and the OLED. Uptime, WiFi, Modbus and OLED come from gateway code of 2026-10-23 or later; an older Pi shows "—".
 
 ### Weekly report
 Generated automatically every Monday at 06:00 (Mexico City) for the previous ISO week (Mon–Sun), in HTML and Excel. To create one on demand, go to **Reportes**, enter a week (e.g. `2026-W39`, or leave it empty for last week) and click **Generar**. Or run:
@@ -724,12 +733,14 @@ All routes require the header `X-Api-Key`. Times are epoch ms or ISO-8601.
 | Method & path | Description |
 |---|---|
 | `GET /config` | Sensor/gateway config used by the dashboard |
-| `GET /live` | Latest values, active alarms, system data, `online`, `age_s` |
+| `GET /live` | Latest values, active alarms, `online`, `age_s`, `system_rx_ms` |
 | `GET /history?from&to&sensors=DEV_5.PhSensor,…&bucket_ms` | Bucketed avg/min/max per sensor |
 | `GET /alarms?from&to&sensors` | Episodes (alarms, warnings near a limit, read errors; default 24 h) and `summary` (totals per kind, top sensor, events per day) |
 | `GET /alarms/export?from&to&sensors` | Episodes as XLSX; presigned download URL |
 | `GET /history/stats?from&to&sensors` | Per sensor: min/avg/max/last, readings in alarm / warning / read error |
-| `GET /system/stats?from&to` | CPU / RAM / disk min/avg/max (default 24 h) |
+| `POST /system/login` `{password}` | `{token, expires_ms}` (12 h) for the system routes; 401 wrong password, 503 none set |
+| `GET /system` | Latest system report (hardware, network, resources, connections); header `X-System-Token` |
+| `GET /system/stats?from&to` | CPU / RAM / disk min/avg/max (default 24 h); header `X-System-Token` |
 | `GET /export?from&to&sensors&format=xlsx\|csv` | Presigned download URL |
 | `GET /tests` · `GET /tests/active` · `GET /tests/{id}` | Tests (with comments) |
 | `POST /tests/start` `{name, operator, notes}` | Start a test (409 if one is running) |

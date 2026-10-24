@@ -2,7 +2,9 @@
 import csv
 import io
 
-from common import athena, queries, storage, timeutil
+import time
+
+from common import athena, ddb, queries, storage, sysauth, timeutil
 from common.report_builder import KIND_LABEL, alarm_summary, collapse_episodes
 
 OFFLINE_FACTOR = 3  # gateway offline if no message for 3 poll intervals
@@ -32,10 +34,12 @@ def get_live(_req):
                 sc = labels.get(key, {})
                 alarms.append({"key": key, "label": sc.get("label", key), "kind": kind, "val": r.get("val"),
                                "unit": sc.get("unit", ""), "min": sc.get("min"), "max": sc.get("max")})
+    # Gateway/hardware/network details are behind the Sistema password (GET /system);
+    # the live view only says when the last system report arrived.
     return {
         "now_ms": now, "rx_ms": rx, "ts": data.get("ts"), "age_s": age_s,
         "online": age_s is not None and age_s < poll_s * OFFLINE_FACTOR,
-        "values": values, "alarms": alarms, "system": system,
+        "values": values, "alarms": alarms, "system_rx_ms": system.get("rx_ms"),
     }
 
 
@@ -164,8 +168,36 @@ def get_export(req):
     return {"url": storage.presign(key), "rows": len(table), "bucket_ms": bucket_ms}
 
 
+def _stored_hash() -> str:
+    stored = ddb.system_password_hash()
+    if not stored:
+        raise LookupError("Sistema sin contraseña: configúrala con tools/set_system_password.py")
+    return stored
+
+
+def _require_system(req) -> None:
+    sysauth.check_token(req.headers.get("x-system-token"), _stored_hash())
+
+
+def system_login(req):
+    """{password} -> {token, expires_ms} for the Sistema routes."""
+    stored = _stored_hash()
+    if not sysauth.verify_password(str(req.body.get("password") or ""), stored):
+        time.sleep(1)  # slows down guessing on top of the API key's throttling
+        raise sysauth.Unauthorized("contraseña incorrecta")
+    token, expires_ms = sysauth.make_token(stored)
+    return {"token": token, "expires_ms": expires_ms}
+
+
+def get_system(req):
+    """Latest gateway system report (hardware, network, resources, connections)."""
+    _require_system(req)
+    return {"now_ms": timeutil.now_ms(), "system": storage.get_json("latest/system.json") or {}}
+
+
 def get_system_stats(req):
     """CPU / RAM / disk min, average and max over a range (default the last 24 h)."""
+    _require_system(req)
     from_ms, to_ms = _range(req, default_hours=24)
     rows = athena.run(queries.system_stats(from_ms, to_ms))
     r = rows[0] if rows else {}

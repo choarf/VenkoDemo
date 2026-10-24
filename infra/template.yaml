@@ -333,7 +333,7 @@ Resources:
       StageName: prod
       Cors:
         AllowOrigin: !Sub "'${AllowedOrigin}'"
-        AllowHeaders: "'Content-Type,X-Api-Key'"
+        AllowHeaders: "'Content-Type,X-Api-Key,X-System-Token'"
         AllowMethods: "'GET,POST,OPTIONS'"
       Auth:
         ApiKeyRequired: true

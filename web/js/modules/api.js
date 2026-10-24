@@ -6,11 +6,12 @@ export class ApiError extends Error {
   constructor(status, msg) { super(msg); this.status = status; }
 }
 
-async function call(method, path, { query, body } = {}) {
+async function call(method, path, { query, body, headers: extra } = {}) {
   const url = new URL(BASE + path, location.href);
   for (const [k, v] of Object.entries(query || {})) if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, v);
   const headers = { "Content-Type": "application/json" };
   if (CFG.apiKey) headers["X-Api-Key"] = CFG.apiKey;
+  Object.assign(headers, extra || {});
   let res;
   try {
     res = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
@@ -29,7 +30,9 @@ export const api = {
   alarms: (from, to) => call("GET", "/alarms", { query: { from, to } }),
   alarmsExport: (from, to) => call("GET", "/alarms/export", { query: { from, to } }),
   historyStats: (from, to, sensors) => call("GET", "/history/stats", { query: { from, to, sensors: sensors.join(",") } }),
-  systemStats: () => call("GET", "/system/stats"),
+  systemLogin: (password) => call("POST", "/system/login", { body: { password } }),
+  system: (token) => call("GET", "/system", { headers: { "X-System-Token": token } }),
+  systemStats: (token) => call("GET", "/system/stats", { headers: { "X-System-Token": token } }),
   exportUrl: (from, to, sensors, format) => call("GET", "/export", { query: { from, to, sensors: sensors.join(","), format } }),
   tests: () => call("GET", "/tests"),
   activeTest: () => call("GET", "/tests/active"),

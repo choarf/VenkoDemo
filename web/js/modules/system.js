@@ -1,4 +1,6 @@
 // Sistema view: gateway and hardware data, CPU / RAM / disk against system_limits, connections.
+// Behind the site's Sistema password: POST /system/login gives a token (kept for this browser
+// tab in sessionStorage) that GET /system and /system/stats need; a 401 shows the form again.
 // Fields the gateway added later (uptime_s, wifi, modbus, mqtt_since, oled_enabled) show "—"
 // until that Pi runs the new code.
 import { api } from "./api.js";
@@ -7,7 +9,21 @@ import { $, el, fmtAge, fmtDateTime, fmtNum } from "./util.js";
 const STATS_TTL_MS = 5 * 60_000;
 const RES = [["cpu", "CPU", "cpu_load_percent"], ["ram", "RAM", "ram_usage_percent"], ["disk", "Disco", "disk_usage_percent"]];
 const STATE_TEXT = { ok: "Normal", warn: "Advertencia", alarm: "Alarma", none: "Sin datos" };
-let cfg, stats = null, statsAt = 0, lastLive = null;
+const TOKEN_KEY = "venko.systemToken";
+let cfg, stats = null, statsAt = 0, lastLive = null, sysData = null, loading = false;
+
+function getToken() { try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; } }
+function setToken(t) {
+  try { t ? sessionStorage.setItem(TOKEN_KEY, t) : sessionStorage.removeItem(TOKEN_KEY); } catch { /* private mode */ }
+}
+
+function showLocked(message = "") {
+  setToken(null);
+  sysData = null; stats = null; statsAt = 0;
+  $("sysContent").hidden = true;
+  $("sysLogin").hidden = false;
+  $("sysLoginMsg").textContent = message;
+}
 
 function fmtUptime(s) {
   if (s === null || s === undefined) return "—";
@@ -38,11 +54,13 @@ function conn(name, status, ok, detail, extra) {
 
 function render() {
   const live = lastLive;
-  if (!live) return;
-  const sys = live.system || {};
+  if (!live || !sysData) return;
+  $("sysLogin").hidden = true;
+  $("sysContent").hidden = false;
+  const sys = sysData.system || {};
   const sensors = cfg.sensors.length;
   const readOk = cfg.sensors.filter((s) => live.values[s.key]?.status === "OK").length;
-  const sysAge = sys.rx_ms ? (live.now_ms - sys.rx_ms) / 1000 : null;
+  const sysAge = sys.rx_ms ? (sysData.now_ms - sys.rx_ms) / 1000 : null;
 
   $("sysKpis").replaceChildren(
     kpi("Estado", live.online ? "En línea" : "Sin datos", `Última lectura hace ${fmtAge(live.age_s)}`, live.online ? "" : "alarm"),
@@ -104,30 +122,60 @@ function render() {
       sys.oled_enabled ? true : null, sys.oled_enabled === false ? "Desactivada en la configuración del sitio" : null, null));
 }
 
-async function loadStats() {
-  if (Date.now() - statsAt < STATS_TTL_MS) return;
-  statsAt = Date.now();
-  try { stats = await api.systemStats(); } catch { stats = null; statsAt = 0; }
-  render();
+/** GET /system (and /system/stats every 5 min) with the token; a 401 locks the view again. */
+async function refresh() {
+  const token = getToken();
+  if (!token) return showLocked();
+  if (loading) return;
+  loading = true;
+  try {
+    sysData = await api.system(token);
+    if (Date.now() - statsAt >= STATS_TTL_MS) {
+      statsAt = Date.now();
+      stats = await api.systemStats(token).catch((e) => { if (e.status === 401) throw e; statsAt = 0; return null; });
+    }
+    render();
+  } catch (err) {
+    if (err.status === 401) showLocked("La sesión de Sistema expiró. Escribe la contraseña de nuevo.");
+    else $("sysLoginMsg").textContent = `Error: ${err.message}`;
+  } finally { loading = false; }
 }
 
-export function initSystem(config) { cfg = config; }
+export function initSystem(config) {
+  cfg = config;
+  $("sysLoginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target, btn = f.querySelector("button");
+    btn.disabled = true;
+    $("sysLoginMsg").textContent = "";
+    try {
+      const { token } = await api.systemLogin(f.elements.password.value);
+      setToken(token);
+      f.reset();
+      await refresh();
+    } catch (err) {
+      $("sysLoginMsg").textContent = err.status === 401 ? "Contraseña incorrecta." : `Error: ${err.message}`;
+    } finally { btn.disabled = false; }
+  });
+  $("sysLogout").addEventListener("click", () => showLocked("Sesión de Sistema cerrada."));
+}
 
-export function onShow() { render(); loadStats(); }
+export function onShow() {
+  if (getToken()) refresh();
+  else { showLocked(); $("sysLoginForm").elements.password.focus(); }
+}
 
 export function onLive(live) {
   lastLive = live;
-  if (!$("view-system").hidden) render();
+  if (!$("view-system").hidden && getToken()) refresh();
 }
 
-/** Short version for the Resumen page. */
+/** Short, non-sensitive version for the Resumen page (details need the Sistema password). */
 export function summaryRows(live) {
-  const sys = live.system || {};
-  const pct = (v) => (v === null || v === undefined ? "—" : `${fmtNum(v, 0)} %`);
   return [
-    ["Gateway", sys.gateway || cfg.gateway.gateway_id],
-    ["Equipo", sys.hw_model || "—"],
-    ["CPU / RAM / Disco", `${pct(sys.cpu_load_percent)} / ${pct(sys.ram_usage_percent)} / ${pct(sys.disk_usage_percent)}`],
-    ["Reporte de sistema", fmtDateTime(sys.rx_ms)],
+    ["Gateway", cfg.gateway.gateway_id],
+    ["Estado", live.online ? "En línea" : "Sin datos recientes"],
+    ["Última lectura", fmtDateTime(live.rx_ms)],
+    ["Reporte de sistema", fmtDateTime(live.system_rx_ms)],
   ];
 }

@@ -4,7 +4,7 @@ import json
 import pytest
 from openpyxl import load_workbook
 
-from common import derived, queries, report_builder, timeutil
+from common import derived, queries, report_builder, sysauth, timeutil
 
 T0 = timeutil.parse_ms("2026-09-21T06:00:00Z")  # Monday 00:00 America/Mexico_City
 POLL = 20_000
@@ -193,3 +193,19 @@ def test_warning_episode_peak_and_summary():
     assert s["top"] == {"key": "A.p", "label": "Presión", "count": 2}
     assert [d["day"] for d in s["days"]] == ["2026-09-21", "2026-09-22"]
     assert s["days"][0] == {"day": "2026-09-21", "alarm": 1, "warn": 1, "err": 1}
+
+
+# ------------------------------------------------------------- sysauth
+def test_password_hash_verify_and_token():
+    stored = sysauth.hash_password("clave-larga-1", iterations=1000)
+    assert stored.startswith("pbkdf2_sha256$1000$") and "clave" not in stored
+    assert sysauth.verify_password("clave-larga-1", stored) and not sysauth.verify_password("clave-larga-2", stored)
+    token, exp_ms = sysauth.make_token(stored, now=1000)
+    assert exp_ms == (1000 + sysauth.TOKEN_TTL_S) * 1000
+    sysauth.check_token(token, stored, now=2000)
+    with pytest.raises(sysauth.Unauthorized):
+        sysauth.check_token(token, stored, now=1000 + sysauth.TOKEN_TTL_S + 1)      # expired
+    with pytest.raises(sysauth.Unauthorized):
+        sysauth.check_token(token, sysauth.hash_password("otra-clave-9", iterations=1000), now=2000)  # changed
+    with pytest.raises(ValueError):
+        sysauth.hash_password("corta")

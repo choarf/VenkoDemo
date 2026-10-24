@@ -340,7 +340,13 @@ Publish config and web app to the site:
 bash tools/deploy_web.sh venko-$KEY ../Akvo_Green/sites/$KEY/config_data/config.json config/sites/$KEY.json
 ```
 
-It refuses to upload if the config's topics don't match the stack's. Then **lock CORS** to the dashboard URL: set `AllowedOrigin=\"https://<DashboardUrl host>\"` in `[plant5.deploy.parameters]` and run:
+It refuses to upload if the config's topics don't match the stack's. Set the **Sistema** tab's password (asks twice; run it in your own terminal):
+
+```bash
+python3 tools/set_system_password.py $KEY
+```
+
+ Then **lock CORS** to the dashboard URL: set `AllowedOrigin=\"https://<DashboardUrl host>\"` in `[plant5.deploy.parameters]` and run:
 
 ```bash
 cd infra && sam deploy --config-env $KEY && cd ..
