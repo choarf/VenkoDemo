@@ -310,6 +310,8 @@ Resources:
             - { Name: disk_usage_percent, Type: double }
             - { Name: ip_address, Type: string }
             - { Name: os, Type: string }
+            - { Name: net_bytes_recv, Type: bigint }
+            - { Name: net_bytes_sent, Type: bigint }
 
   AthenaWorkGroup:
     Type: AWS::Athena::WorkGroup

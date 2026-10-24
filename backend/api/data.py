@@ -209,5 +209,16 @@ def get_system_stats(req):
         for n in series:
             if h.get(n) not in (None, ""):
                 series[n].append([int(h["t"]), athena.num(h[n])])
+    # Network: bytes per bucket -> average bit/s over the bucket, plus totals.
+    net = {"down": [], "up": [], "total_down": 0, "total_up": 0}
+    for h in athena.run(queries.system_network(from_ms, to_ms, bucket_ms)):
+        dt_s = (athena.num(h["dt"]) or 0) / 1000
+        if dt_s <= 0:
+            continue
+        down, up = athena.num(h["down"]) or 0, athena.num(h["up"]) or 0
+        net["down"].append([int(h["t"]), round(down * 8 / dt_s, 1)])
+        net["up"].append([int(h["t"]), round(up * 8 / dt_s, 1)])
+        net["total_down"] += int(down)
+        net["total_up"] += int(up)
     return {"from_ms": from_ms, "to_ms": to_ms, "samples": int(r.get("samples") or 0), "bucket_ms": bucket_ms,
-            "series": series, **stats}
+            "series": series, "net": net, **stats}

@@ -214,3 +214,9 @@ def test_password_hash_verify_and_token():
 def test_system_history_sql_buckets_by_time():
     sql = queries.system_history(T0, T0 + 86_400_000, 900_000)
     assert "(rx_ms / 900000) * 900000 AS t" in sql and "avg(ram_usage_percent) AS ram" in sql and "GROUP BY 1" in sql
+
+
+def test_system_network_sql_uses_counter_differences():
+    sql = queries.system_network(T0, T0 + 86_400_000, 900_000)
+    assert "net_bytes_recv - lag(net_bytes_recv) OVER (ORDER BY rx_ms) AS down" in sql
+    assert "WHERE dt > 0 AND down >= 0 AND up >= 0" in sql

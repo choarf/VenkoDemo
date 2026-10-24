@@ -52,6 +52,48 @@ function conn(name, status, ok, detail, extra) {
     extra ? el("span", { class: "muted small" }, extra) : null);
 }
 
+const NET_TYPE = { wifi: "WiFi", ethernet: "Ethernet (cable)", cellular: "Celular (módem)", other: "Otra" };
+
+/** "Red": the link the gateway uses to reach the internet, and WiFi details when it's WiFi. */
+function netCard(sys) {
+  const net = sys.network, wifi = sys.wifi;
+  if (net === undefined) return conn("Red", "—", null, null, null);   // Pi without this report yet
+  if (net === null) return conn("Red", "Sin ruta", false, "El gateway no tiene salida a internet", null);
+  const extra = net.type === "wifi" && wifi
+    ? `${wifi.ssid || "—"}${wifi.profile ? ` (${wifi.profile})` : ""}${wifi.signal != null ? ` · señal ${wifi.signal} %` : ""}`
+    : null;
+  return conn("Red", NET_TYPE[net.type] || net.type, true, `Interfaz ${net.iface} · IP ${sys.ip_address || "—"}`, extra);
+}
+
+function fmtBits(bps) {
+  if (bps === null || bps === undefined) return "—";
+  return bps >= 1e6 ? `${fmtNum(bps / 1e6, 1)} Mbit/s` : `${fmtNum(bps / 1e3, 1)} kbit/s`;
+}
+function fmtBytes(b) {
+  return b >= 1e9 ? `${fmtNum(b / 1e9, 2)} GB` : b >= 1e6 ? `${fmtNum(b / 1e6, 1)} MB` : `${fmtNum(b / 1e3, 0)} kB`;
+}
+
+let netChart = null;
+function drawNetChart() {
+  const net = stats?.net;
+  if (!net) return;
+  const css = (v) => getComputedStyle(document.body).getPropertyValue(v).trim();
+  $("netTotals").textContent = `Bajada ${fmtBytes(net.total_down)} · subida ${fmtBytes(net.total_up)} en 24 h`;
+  netChart?.destroy();
+  netChart = Highcharts.chart($("netChart"), {
+    chart: { type: "area", animation: false, backgroundColor: "transparent" },
+    title: { text: null }, credits: { enabled: false }, exporting: { enabled: false },
+    xAxis: { type: "datetime" },
+    yAxis: { min: 0, title: { text: null }, labels: { formatter() { return fmtBits(this.value); } } },
+    tooltip: { shared: true, xDateFormat: "%d-%b %H:%M", pointFormatter() {
+      return `<span style="color:${this.color}">●</span> ${this.series.name}: <b>${fmtBits(this.y)}</b><br/>`; } },
+    plotOptions: { area: { marker: { enabled: false }, lineWidth: 2, fillOpacity: 0.12 } },
+    lang: { noData: "Sin datos de red de 24 h" },
+    series: [{ name: "Bajada", data: net.down, color: css("--accent") },
+             { name: "Subida", data: net.up, color: css("--warn") }],
+  });
+}
+
 function render() {
   const live = lastLive;
   if (!live || !sysData) return;
@@ -111,12 +153,7 @@ function render() {
     conn("Modbus RS-485", mb ? (mb.connected ? "Conectado" : "Desconectado") : "—", mb ? mb.connected : null,
       mb ? (mb.simulated ? "Simulado (sin puerto serie)" : `${mb.port || "—"} · ${mb.baudrate || "—"} baud`) : null,
       `${readOk} de ${sensors} sensores responden`),
-    // wifi undefined: the Pi doesn't report it yet; null: no active WiFi link (cable or other network).
-    wifi === null
-      ? conn("WiFi", "No se usa", null, "El gateway sale por cable u otra red", null)
-      : conn("WiFi", wifi ? "Conectado" : "—", wifi ? true : null,
-          wifi?.ssid ? `${wifi.ssid}${wifi.profile ? ` (${wifi.profile})` : ""}` : null,
-          wifi?.signal !== undefined && wifi?.signal !== null ? `Señal ${wifi.signal} %` : null),
+    netCard(sys),
     // Off is a site setting (display.csv), not a fault: neutral tag either way.
     conn("Pantalla OLED", sys.oled_enabled === undefined ? "—" : sys.oled_enabled ? "Activa" : "Apagada",
       sys.oled_enabled ? true : null, sys.oled_enabled === false ? "Desactivada en la configuración del sitio" : null, null));
@@ -184,6 +221,7 @@ async function refresh() {
       stats = await api.systemStats(token).catch((e) => { if (e.status === 401) throw e; statsAt = 0; return null; });
       render();
       drawResourceCharts();
+      drawNetChart();
     } else {
       render();
     }
@@ -195,7 +233,7 @@ async function refresh() {
 
 export function initSystem(config) {
   cfg = config;
-  document.addEventListener("themechange", drawResourceCharts);
+  document.addEventListener("themechange", () => { drawResourceCharts(); drawNetChart(); });
   $("sysLoginForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = e.target, btn = f.querySelector("button");

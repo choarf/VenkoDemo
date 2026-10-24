@@ -72,7 +72,7 @@ def system_report():
         "cpu_load_percent": 12 + random.random() * 8, "ram_usage_percent": 41.3, "disk_usage_percent": 84.0,
         "hostname": "cmd4", "hw_model": "Raspberry Pi Compute Module 5 Rev 1.0 (MOCK)", "hw_serial": "a011e469c0bed714",
         "uptime_s": 3 * 86400 + 4 * 3600, "mqtt_since": now / 1000 - 5 * 3600, "oled_enabled": False,
-        "wifi": {"ssid": "Vocho", "profile": "akvo-wifi1", "signal": 72},
+        "wifi": {"ssid": "Vocho", "profile": "akvo-wifi1", "signal": 72}, "network": {"iface": "wlan0", "type": "wifi"},
         "modbus": {"connected": True, "port": None, "baudrate": None, "simulated": True},
         "rx_ms": now - 30_000}
 
@@ -195,7 +195,11 @@ class Handler(SimpleHTTPRequestHandler):
             pts = range(frm - frm % 900_000, now, 900_000)
             series = {"cpu": [[t, round(10 + 6 * math.sin(t / 7_200_000) + random.random() * 3, 1)] for t in pts],
                       "ram": [[t, round(40 + 2 * math.sin(t / 20_000_000), 1)] for t in pts], "disk": [[t, 84.0] for t in pts]}
-            return self._json({"from_ms": frm, "to_ms": now, "samples": 4320, "bucket_ms": 900_000, "series": series,
+            down = [[t, round(40_000 + 30_000 * abs(math.sin(t / 5_000_000)) + random.random() * 8000, 1)] for t in pts]
+            up = [[t, round(9_000 + 4_000 * abs(math.sin(t / 3_000_000)), 1)] for t in pts]
+            net = {"down": down, "up": up, "total_down": int(sum(v for _, v in down) * 900 / 8),
+                   "total_up": int(sum(v for _, v in up) * 900 / 8)}
+            return self._json({"from_ms": frm, "to_ms": now, "samples": 4320, "bucket_ms": 900_000, "series": series, "net": net,
                                "cpu": {"min": 7.0, "avg": 12.4, "max": 23.0}, "ram": {"min": 39.0, "avg": 41.2, "max": 44.0},
                                "disk": {"min": 83.0, "avg": 83.6, "max": 84.0}})
         if (method, path) == ("GET", "/history"):

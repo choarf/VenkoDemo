@@ -174,3 +174,20 @@ def system_history(from_ms: int, to_ms: int, bucket_ms: int) -> str:
         f"FROM {settings.SYSTEM_TABLE} WHERE dt BETWEEN '{lo}' AND '{hi}' "
         f"AND rx_ms >= {int(from_ms)} AND rx_ms < {int(to_ms)} GROUP BY 1 ORDER BY 1"
     )
+
+
+def system_network(from_ms: int, to_ms: int, bucket_ms: int) -> str:
+    """Download / upload bytes per time bucket from the gateway's cumulative counters
+    (net_bytes_recv/sent, all interfaces but loopback): the difference between consecutive
+    reports, skipping negative ones (counters restart with the Pi)."""
+    lo, hi = timeutil.dt_bounds(from_ms, to_ms)
+    b = int(bucket_ms)
+    return (
+        f"SELECT (t / {b}) * {b} AS t, sum(dt) AS dt, sum(down) AS down, sum(up) AS up FROM ("
+        "SELECT rx_ms AS t, rx_ms - lag(rx_ms) OVER (ORDER BY rx_ms) AS dt, "
+        "net_bytes_recv - lag(net_bytes_recv) OVER (ORDER BY rx_ms) AS down, "
+        "net_bytes_sent - lag(net_bytes_sent) OVER (ORDER BY rx_ms) AS up "
+        f"FROM {settings.SYSTEM_TABLE} WHERE dt BETWEEN '{lo}' AND '{hi}' "
+        f"AND rx_ms >= {int(from_ms)} AND rx_ms < {int(to_ms)}"
+        ") WHERE dt > 0 AND down >= 0 AND up >= 0 GROUP BY 1 ORDER BY 1"
+    )
