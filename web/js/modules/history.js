@@ -1,7 +1,7 @@
 // History / query view: time range + sensors -> chart, Excel/CSV export.
 import { api } from "./api.js";
 import { drawTrend, sensorPicker } from "./trend.js";
-import { $, fromLocalInput, toLocalInput } from "./util.js";
+import { $, el, fillTable, fmtNum, fromLocalInput, toLocalInput } from "./util.js";
 
 let cfg, chart = null, selected;
 
@@ -25,7 +25,7 @@ async function load() {
   msg.textContent = "Consultando…";
   try {
     const { from, to } = range();
-    const res = await api.history(from, to, keys);
+    const [res] = await Promise.all([api.history(from, to, keys), loadStats(from, to, keys)]);
     if (chart) chart.destroy();
     chart = drawTrend($("histChart"), cfg.sensors, keys, res.series);
     const n = Object.values(res.series).reduce((a, s) => a + s.length, 0);
@@ -33,6 +33,23 @@ async function load() {
   } catch (err) {
     msg.textContent = `Error: ${err.message}`;
   } finally { $("histLoad").disabled = false; }
+}
+
+async function loadStats(from, to, keys) {
+  const byKey = Object.fromEntries(cfg.sensors.map((s) => [s.key, s]));
+  try {
+    const { stats } = await api.historyStats(from, to, keys);
+    fillTable($("histStats"), ["Sensor", "Mínimo", "Promedio", "Máximo", "Último", "Límites", "Alertas"],
+      stats.filter((r) => byKey[r.k]).map((r) => {
+        const s = byKey[r.k], d = s.decimals ?? 2, u = (v) => (v == null ? "—" : `${fmtNum(v, d)} ${s.unit}`);
+        const al = r.alarm ? ["alarm", `${r.alarm} lecturas en alarma`] : r.warn ? ["warn", `${r.warn} lecturas en advertencia`]
+          : r.err ? ["err", `${r.err} errores de lectura`] : ["ok", "Sin alertas"];
+        return [s.label, { text: u(r.min), class: "num" }, { text: u(r.avg), class: "num" }, { text: u(r.max), class: "num" },
+          { text: u(r.last), class: "num" }, `${s.min} – ${s.max} ${s.unit}`, { node: el("span", { class: `tag ${al[0]}` }, al[1]) }];
+      }), { empty: "Sin lecturas en el rango" });
+  } catch (err) {
+    fillTable($("histStats"), ["Error"], [[err.message]]);
+  }
 }
 
 async function exportData(format) {

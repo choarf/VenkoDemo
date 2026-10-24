@@ -6,7 +6,7 @@ const css = (v) => getComputedStyle(document.body).getPropertyValue(v).trim();
 export function chartTheme() {
   const fg = css("--fg"), muted = css("--muted"), line = css("--line");
   return {
-    chart: { backgroundColor: "transparent", style: { fontFamily: "Segoe UI, system-ui, sans-serif" } },
+    chart: { backgroundColor: "transparent", style: { fontFamily: "Montserrat, system-ui, sans-serif" } },
     title: { style: { color: fg } },
     legend: { itemStyle: { color: fg }, itemHoverStyle: { color: muted } },
     xAxis: { labels: { style: { color: muted } }, lineColor: line, tickColor: line, gridLineColor: line },
@@ -29,7 +29,9 @@ function apply() {
 }
 
 export function initTheme(button) {
-  document.body.classList.toggle("dark", storageGet("venko.dark", true));
+  // No saved choice yet: follow the device's light/dark setting.
+  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+  document.body.classList.toggle("dark", storageGet("venko.dark", prefersDark));
   Highcharts.setOptions(chartTheme());
   button.addEventListener("click", () => {
     const dark = !document.body.classList.contains("dark");

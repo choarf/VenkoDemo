@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ ctx.title }}</title>
-<script src="https://code.highcharts.com/{{ ctx.highcharts_version }}/highcharts.js"></script>
-<script src="https://code.highcharts.com/{{ ctx.highcharts_version }}/highcharts-more.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highcharts@{{ ctx.highcharts_version }}/highcharts.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highcharts@{{ ctx.highcharts_version }}/highcharts-more.js"></script>
 <style>
   :root { --navy:#0f2235; --fg:#1d2430; --muted:#5d6878; --line:#d9e0ea; --bad:#c62828; --warn:#ef6c00; --ok:#2e7d32; }
   * { box-sizing: border-box; }
@@ -24,7 +24,7 @@
   th:first-child, td:first-child, td.l, th.l { text-align: left; }
   th { background: #f1f4f8; }
   .st { font-weight: 600; }
-  .st.OK { color: var(--ok); } .st.ALARMA { color: var(--bad); } .st.SIN { color: var(--warn); }
+  .st.OK { color: var(--ok); } .st.ALARMA { color: var(--bad); } .st.SIN { color: var(--warn); } .st.ADVERTENCIA { color: var(--warn); }
   .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
   .chart { height: 240px; border: 1px solid var(--line); border-radius: 8px; }
   .meta td { text-align: left; } .meta td:first-child { color: var(--muted); width: 180px; }
@@ -67,6 +67,20 @@
     </tr>
     {% endfor %}
   </table>
+
+  {% if ctx.derived %}
+  <h2>Indicadores del proceso (promedio del periodo)</h2>
+  <table>
+    <tr><th>Indicador</th><th>Unidad</th><th>Promedio</th><th>Límites</th><th>Estado</th></tr>
+    {% for d in ctx.derived %}
+    <tr>
+      <td>{{ d.label }}{% if d.provisional %} <small>(límites provisionales)</small>{% endif %}</td><td>{{ d.unit }}</td>
+      <td>{{ d.avg if d.avg is not none else "—" }}</td><td>{{ d.lim_min }} – {{ d.lim_max }}</td>
+      <td class="st {{ d.status.split(' ')[0] }}">{{ d.status }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
 
   <h2>Tendencias (promedio cada {{ ctx.bucket_min }} min, banda mín–máx)</h2>
   <div class="charts" id="charts"></div>

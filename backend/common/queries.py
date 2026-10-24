@@ -49,14 +49,61 @@ def history(from_ms: int, to_ms: int, keys: list[str], bucket_ms: int) -> str:
     )
 
 
-def abnormal_rows(from_ms: int, to_ms: int, keys: list[str] | None = None) -> str:
-    """Every sample that is in alarm or failed to read; collapsed into episodes in Python."""
+def warn_bands(sensors: list[dict]) -> list[tuple[str, float, float]]:
+    """(key, warn below, warn above) per sensor: the warn_margin share of its range inside each limit.
+
+    Sensors without numeric limits or with a key that fails the key check are skipped, so
+    what reaches the SQL is only validated keys and plain floats."""
+    bands = []
+    for s in sensors:
+        lo, hi, key = s.get("min"), s.get("max"), s.get("key", "")
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (lo, hi)) or hi <= lo:
+            continue
+        if not _KEY_RE.match(key):
+            continue
+        m = (hi - lo) * float(s.get("warn_margin", 0.1))
+        bands.append((key, float(lo + m), float(hi - m)))
+    return bands
+
+
+def _kind(bands: list[tuple[str, float, float]] | None) -> str:
+    """Per-sample kind: read error status, LOW/HIGH alarm, WARN_LOW/WARN_HIGH near a limit, else NULL."""
+    k = "concat(d.device, '.', s.sensor)"
+    expr = "CASE WHEN r.status <> 'OK' THEN r.status WHEN r.alarm IN ('LOW', 'HIGH') THEN r.alarm"
+    if bands:
+        high = " OR ".join(f"({k} = '{key}' AND r.val > {wh!r})" for key, _, wh in bands)
+        low = " OR ".join(f"({k} = '{key}' AND r.val < {wl!r})" for key, wl, _ in bands)
+        expr += f" WHEN {high} THEN 'WARN_HIGH' WHEN {low} THEN 'WARN_LOW'"
+    return expr + " END"
+
+
+def abnormal_rows(from_ms: int, to_ms: int, keys: list[str] | None = None,
+                  bands: list[tuple[str, float, float]] | None = None) -> str:
+    """Every sample that failed to read, is in alarm or (with bands) near a limit;
+    collapsed into episodes in Python."""
     return (
-        "SELECT concat(d.device, '.', s.sensor) AS k, rx_ms AS t, r.val AS val, "
-        "CASE WHEN r.status = 'OK' THEN r.alarm ELSE r.status END AS kind "
+        "SELECT k, t, val, kind FROM ("
+        f"SELECT concat(d.device, '.', s.sensor) AS k, rx_ms AS t, r.val AS val, {_kind(bands)} AS kind "
         + _FLAT.format(table=settings.DATA_TABLE)
         + _where(from_ms, to_ms, keys)
-        + " AND (r.status <> 'OK' OR r.alarm IN ('LOW', 'HIGH')) ORDER BY 1, 2"
+        + ") WHERE kind IS NOT NULL ORDER BY 1, 2"
+    )
+
+
+def range_stats(from_ms: int, to_ms: int, keys: list[str] | None = None,
+                bands: list[tuple[str, float, float]] | None = None) -> str:
+    """Per sensor over a range: min/avg/max/last of good readings and how many were
+    in alarm, near a limit (warning) or failed to read (Históricos summary)."""
+    return (
+        "SELECT k, count(*) AS samples, count_if(status = 'OK') AS ok, "
+        "min(val) FILTER (WHERE status = 'OK') AS min, avg(val) FILTER (WHERE status = 'OK') AS avg, "
+        "max(val) FILTER (WHERE status = 'OK') AS max, max_by(val, t) FILTER (WHERE status = 'OK') AS last, "
+        "count_if(kind IN ('LOW', 'HIGH')) AS alarm, count_if(kind IN ('WARN_LOW', 'WARN_HIGH')) AS warn, "
+        "count_if(status <> 'OK') AS err FROM ("
+        f"SELECT concat(d.device, '.', s.sensor) AS k, rx_ms AS t, r.val AS val, r.status AS status, {_kind(bands)} AS kind "
+        + _FLAT.format(table=settings.DATA_TABLE)
+        + _where(from_ms, to_ms, keys)
+        + ") GROUP BY 1 ORDER BY 1"
     )
 
 
@@ -98,6 +145,20 @@ def system_summary(from_ms: int, to_ms: int) -> str:
         "max(disk_usage_percent) AS disk_max, "
         "max_by(ip_address, rx_ms) AS ip, max_by(os, rx_ms) AS os, "
         "max_by(platform_type, rx_ms) AS platform "
+        f"FROM {settings.SYSTEM_TABLE} WHERE dt BETWEEN '{lo}' AND '{hi}' "
+        f"AND rx_ms >= {int(from_ms)} AND rx_ms < {int(to_ms)}"
+    )
+
+
+def system_stats(from_ms: int, to_ms: int) -> str:
+    """Min / average / max of the gateway's CPU, RAM and disk use over a range (Sistema view)."""
+    lo, hi = timeutil.dt_bounds(from_ms, to_ms)
+    cols = ", ".join(
+        f"min({c}) AS {n}_min, avg({c}) AS {n}_avg, max({c}) AS {n}_max"
+        for n, c in (("cpu", "cpu_load_percent"), ("ram", "ram_usage_percent"), ("disk", "disk_usage_percent"))
+    )
+    return (
+        f"SELECT count(*) AS samples, {cols} "
         f"FROM {settings.SYSTEM_TABLE} WHERE dt BETWEEN '{lo}' AND '{hi}' "
         f"AND rx_ms >= {int(from_ms)} AND rx_ms < {int(to_ms)}"
     )

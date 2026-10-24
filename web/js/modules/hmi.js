@@ -47,6 +47,7 @@ async function loadTrend() {
 }
 
 function renderActive() {
+  $("hmiCard").classList.toggle("running-card", !!active);
   $("startForm").hidden = !!active;
   $("runningBox").hidden = !active;
   $("commentScope").textContent = active ? `· ligados a ${active.id}` : "· monitoreo libre (últimas 24 h)";

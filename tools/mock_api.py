@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-from common import report_builder, timeutil  # noqa: E402
+from common import queries, report_builder, timeutil  # noqa: E402
 from sync_config import DEFAULT_OVERRIDES, DEFAULT_SOURCE, build  # noqa: E402
 
 CFG = build(json.loads(DEFAULT_SOURCE.read_text()), json.loads(DEFAULT_OVERRIDES.read_text()))
@@ -61,7 +61,11 @@ def live():
             "alarms": alarms, "system": {
                 "gateway": CFG["gateway"]["gateway_id"], "city_time": timeutil.local_str(now, CFG["gateway"]["city"]),
                 "platform_type": "Raspberry Pi (MOCK)", "os": "Linux 6.6", "ip_address": "192.168.10.12",
-                "cpu_load_percent": 12 + random.random() * 8, "ram_usage_percent": 41.3, "disk_usage_percent": 23.0,
+                "cpu_load_percent": 12 + random.random() * 8, "ram_usage_percent": 41.3, "disk_usage_percent": 84.0,
+                "hostname": "cmd4", "hw_model": "Raspberry Pi Compute Module 5 Rev 1.0 (MOCK)", "hw_serial": "a011e469c0bed714",
+                "uptime_s": 3 * 86400 + 4 * 3600, "mqtt_since": now / 1000 - 5 * 3600, "oled_enabled": False,
+                "wifi": {"ssid": "Vocho", "profile": "akvo-wifi1", "signal": 72},
+                "modbus": {"connected": True, "port": None, "baudrate": None, "simulated": True},
                 "rx_ms": now - 30_000}}
 
 
@@ -78,12 +82,16 @@ def history(from_ms, to_ms, keys, bucket_ms):
     return out
 
 
-def abnormal(from_ms, to_ms):
+def abnormal(from_ms, to_ms, warnings=False):
     rows = []
+    bands = {k: (lo, hi) for k, lo, hi in queries.warn_bands(CFG["sensors"])} if warnings else {}
     for s in CFG["sensors"]:
         for t in range((from_ms // POLL_MS) * POLL_MS, to_ms, POLL_MS):
             r = reading(s, t)
             kind = r.get("alarm") if r["status"] == "OK" else r["status"]
+            if kind == "NORMAL" and s["key"] in bands:
+                lo, hi = bands[s["key"]]
+                kind = "WARN_HIGH" if r["val"] > hi else "WARN_LOW" if r["val"] < lo else kind
             if kind != "NORMAL":
                 rows.append({"k": s["key"], "t": t, "val": r.get("val"), "kind": kind})
     return rows
@@ -166,6 +174,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(CFG)
         if (method, path) == ("GET", "/live"):
             return self._json(live())
+        if (method, path) == ("GET", "/system/stats"):
+            frm = now - 86_400_000 if not q.get("from") else frm
+            return self._json({"from_ms": frm, "to_ms": now, "samples": 4320,
+                               "cpu": {"min": 7.0, "avg": 12.4, "max": 23.0}, "ram": {"min": 39.0, "avg": 41.2, "max": 44.0},
+                               "disk": {"min": 83.0, "avg": 83.6, "max": 84.0}})
         if (method, path) == ("GET", "/history"):
             b = timeutil.pick_bucket_ms(frm, to)
             series = {}
@@ -173,11 +186,36 @@ class Handler(SimpleHTTPRequestHandler):
                 series.setdefault(p["k"], []).append([p["t"], p["avg"], p["min"], p["max"]])
             return self._json({"from_ms": frm, "to_ms": to, "bucket_ms": b, "series": series})
         if (method, path) == ("GET", "/alarms"):
-            eps = report_builder.collapse_episodes(abnormal(frm, to), int(POLL_MS * 2.5))
+            frm = int(q.get("from") or to - 86_400_000)
+            frm = max(frm, to - 7 * 86_400_000)  # the mock recomputes every sample: keep it quick
+            eps = report_builder.collapse_episodes(abnormal(frm, to, warnings=True), int(POLL_MS * 2.5))
             labels = {s["key"]: s for s in CFG["sensors"]}
             for e in eps:
-                e.update(label=labels[e["k"]]["label"], unit=labels[e["k"]]["unit"])
-            return self._json({"episodes": sorted(eps, key=lambda e: -e["start"])})
+                sc = labels[e["k"]]
+                e.update(label=sc["label"], unit=sc["unit"], min=sc["min"], max=sc["max"])
+            summary = report_builder.alarm_summary(eps, {k: v["label"] for k, v in labels.items()}, frm, to,
+                                                   CFG["gateway"]["city"])
+            return self._json({"from_ms": frm, "to_ms": to, "episodes": sorted(eps, key=lambda e: -e["start"]),
+                               "summary": summary})
+        if (method, path) == ("GET", "/alarms/export"):
+            return self._json({"error": "export not available in mock"}, 501)
+        if (method, path) == ("GET", "/history/stats"):
+            bands = {k: (lo, hi) for k, lo, hi in queries.warn_bands(CFG["sensors"])}
+            stats = []
+            for s in CFG["sensors"]:
+                if keys and s["key"] not in keys:
+                    continue
+                vals = [reading(s, t) for t in range((frm // POLL_MS) * POLL_MS, min(to, now), POLL_MS * 15)]
+                ok = [r["val"] for r in vals if r["status"] == "OK"]
+                lo, hi = bands.get(s["key"], (None, None))
+                stats.append({"k": s["key"], "samples": len(vals), "ok": len(ok),
+                              "min": min(ok, default=None), "avg": sum(ok) / len(ok) if ok else None,
+                              "max": max(ok, default=None), "last": ok[-1] if ok else None,
+                              "alarm": sum(1 for r in vals if r.get("alarm") in ("LOW", "HIGH")),
+                              "warn": sum(1 for v in ok if lo is not None and (v > hi or v < lo)
+                                          and s["min"] <= v <= s["max"]),
+                              "err": len(vals) - len(ok)})
+            return self._json({"from_ms": frm, "to_ms": to, "stats": stats})
         if (method, path) == ("GET", "/export"):
             return self._json({"error": "export not available in mock"}, 501)
         if (method, path) == ("GET", "/tests"):

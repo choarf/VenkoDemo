@@ -47,6 +47,12 @@ cat > "$TMP/app-config.js" <<JS
 window.VENKO = { apiBase: "$API_URL", apiKey: "$API_KEY" };
 JS
 
-aws s3 sync "$ROOT/web/" "s3://$WEB_BUCKET/" --delete --exclude "app-config.example.js" --exclude "app-config.js"
-aws s3 cp "$TMP/app-config.js" "s3://$WEB_BUCKET/app-config.js"
+# no-cache: browsers revalidate every file on each load (a 304 when unchanged). Without a
+# Cache-Control header they cached the page's files by their own rules for hours, and after a
+# deploy mixed a new index.html with an old CSS/JS - an unstyled header and dead tabs.
+# cp (not sync) so files that didn't change also get the header; sync --delete then only removes.
+aws s3 cp "$ROOT/web/" "s3://$WEB_BUCKET/" --recursive --only-show-errors --cache-control "no-cache" \
+  --exclude "app-config.example.js" --exclude "app-config.js"
+aws s3 sync "$ROOT/web/" "s3://$WEB_BUCKET/" --delete --only-show-errors --exclude "app-config.example.js" --exclude "app-config.js"
+aws s3 cp "$TMP/app-config.js" "s3://$WEB_BUCKET/app-config.js" --only-show-errors --cache-control "no-cache"
 echo "Dashboard: $(out DashboardUrl)"

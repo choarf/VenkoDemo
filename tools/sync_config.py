@@ -59,6 +59,9 @@ def build(source: dict, overrides: dict) -> dict:
 
     gw = source.get("gateway", {})
     return {
+        "derived": derived_entries(overrides.get("derived", []), {s["key"] for s in sensors},
+                                   defaults.get("warn_margin", 0.1)),
+        "system_limits": system_limits(overrides.get("system_limits", {})),
         "generated_at": datetime.now(UTC).isoformat(),
         "source_hash": source.get("meta", {}).get("hash", ""),
         "site": overrides.get("site", {}),
@@ -67,6 +70,59 @@ def build(source: dict, overrides: dict) -> dict:
         "topics": {"data": source.get("aws", {}).get("topic_pub"), "system": source.get("aws", {}).get("topic_system")},
         "sensors": sensors,
     }
+
+
+DERIVED_OPS = {"ratio": ("a", "b"), "diff": ("a", "b"), "balance": ("a", "minus")}
+
+
+def derived_entries(entries: list, sensor_keys: set, warn_margin: float) -> list:
+    """Process indicators (backend/common/derived.py): fixed operations on existing sensors."""
+    out, seen = [], set()
+    for i, d in enumerate(entries):
+        where = f"derived[{i}] ({d.get('key', '?')})"
+        key = d.get("key", "")
+        if not key.replace("_", "").isalnum() or key in seen:
+            raise ValueError(f"{where}: key must be unique letters/digits/_")
+        seen.add(key)
+        op = d.get("op")
+        if op not in DERIVED_OPS:
+            raise ValueError(f"{where}: op must be one of {', '.join(DERIVED_OPS)}")
+        refs = [d.get("a")] + (d.get("minus") or [] if op == "balance" else [d.get("b")])
+        if op == "balance" and not d.get("minus"):
+            raise ValueError(f"{where}: balance needs a non-empty 'minus' list")
+        missing = [r for r in refs if r not in sensor_keys]
+        if missing:
+            raise ValueError(f"{where}: unknown sensor(s) {', '.join(map(str, missing))}")
+        lo, hi = d.get("min"), d.get("max")
+        if not all(isinstance(v, (int, float)) for v in (lo, hi)) or lo >= hi:
+            raise ValueError(f"{where}: needs numeric min < max")
+        e = {"key": key, "label": d.get("label", key), "unit": d.get("unit", ""), "op": op, "a": d["a"],
+             "min": lo, "max": hi, "decimals": d.get("decimals", 1), "warn_margin": d.get("warn_margin", warn_margin),
+             "provisional": bool(d.get("provisional", False))}
+        if op == "balance":
+            e["minus"] = list(d["minus"])
+        else:
+            e["b"] = d["b"]
+        if op == "ratio":
+            e["scale"] = d.get("scale", 1)
+        out.append(e)
+    return out
+
+
+SYSTEM_LIMITS = {"cpu": [80, 90], "ram": [80, 90], "disk": [80, 90]}
+
+
+def system_limits(over: dict) -> dict:
+    """Gateway resource thresholds in % ([warning, alarm]) for the Sistema view."""
+    limits = dict(SYSTEM_LIMITS)
+    for name, pair in over.items():
+        if name not in SYSTEM_LIMITS:
+            raise ValueError(f"system_limits: unknown resource {name!r} (use cpu, ram, disk)")
+        if (not isinstance(pair, list) or len(pair) != 2 or not all(isinstance(v, (int, float)) for v in pair)
+                or not 0 < pair[0] < pair[1] <= 100):
+            raise ValueError(f"system_limits.{name}: expected [warning, alarm] with 0 < warning < alarm <= 100")
+        limits[name] = pair
+    return limits
 
 
 def init_overrides(source: dict, path: Path) -> dict:

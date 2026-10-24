@@ -5,17 +5,23 @@ import * as hmi from "./modules/hmi.js";
 import * as history from "./modules/history.js";
 import * as overview from "./modules/overview.js";
 import * as reports from "./modules/reports.js";
+import * as system from "./modules/system.js";
 import { initTheme } from "./modules/theme.js";
 import { $, fmtAge, fmtDuration, setTimezone } from "./modules/util.js";
 
 const LIVE_POLL_MS = 10_000;
-const VIEWS = { overview: null, test: null, alarms: alarms.onShow, history: history.onShow, reports: reports.onShow };
+const VIEWS = { overview: null, test: null, alarms: alarms.onShow, history: history.onShow, reports: reports.onShow, system: system.onShow };
 let cfg, active = null;
 
+const CHARTS_MISSING = "No se pudo cargar la librería de gráficas (sin conexión o bloqueada): las gráficas no se mostrarán; los datos sí.";
+let chartsMissing = false;
+
 function showError(text) {
+  // A successful poll clears its own errors, but the missing-charts notice stays.
+  const msg = text || (chartsMissing ? CHARTS_MISSING : "");
   const b = $("errorBanner");
-  b.hidden = !text;
-  b.textContent = text || "";
+  b.hidden = !msg;
+  b.textContent = msg;
 }
 
 function route() {
@@ -49,6 +55,7 @@ async function pollLive() {
     overview.onLive(live, cfg);
     alarms.onLive(live);
     hmi.onLive(live);
+    system.onLive(live);
     // Another operator may have started/stopped a test from a different browser.
     if ((act.test?.id || null) !== (active?.id || null)) await hmi.setActive(act.test);
   } catch (err) {
@@ -56,7 +63,19 @@ async function pollLive() {
   }
 }
 
+/** Highcharts comes from a CDN; when it's blocked or down, keep the dashboard working without
+ *  charts (a no-op stand-in) instead of stopping at the first Highcharts call. */
+function chartsFallback() {
+  if (window.Highcharts) return;
+  chartsMissing = true;
+  showError("");
+  const axis = () => ({ addPlotBand() {}, addPlotLine() {}, update() {} });
+  const fake = () => ({ destroy() {}, reflow() {}, redraw() {}, update() {}, series: [], xAxis: [axis()], yAxis: [axis()] });
+  window.Highcharts = { charts: [], setOptions() {}, chart: fake };
+}
+
 async function boot() {
+  chartsFallback();
   initTheme($("themeBtn"));
   try {
     cfg = await api.config();
@@ -77,6 +96,17 @@ async function boot() {
   alarms.initAlarms(cfg);
   history.initHistory(cfg);
   reports.initReports();
+  system.initSystem(cfg);
+
+  // Charts keep the width they were drawn at; follow the content width instead (phone rotation,
+  // a late layout pass on narrow screens, the window resized).
+  let lastWidth = 0;
+  new ResizeObserver(([entry]) => {
+    const w = Math.round(entry.contentRect.width);
+    if (w === lastWidth) return;
+    lastWidth = w;
+    Highcharts.charts.forEach((c) => c && c.reflow());
+  }).observe(document.querySelector("main"));
 
   window.addEventListener("hashchange", route);
   route();

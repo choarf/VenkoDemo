@@ -16,11 +16,14 @@ What the dashboard does:
 
 | View | What it shows |
 |---|---|
-| **Resumen** (free run) | One dial per sensor from `config.json` (limits, warn/alarm colours), KPIs, system data table, active alarms. Monitoring only; nothing is recorded as a test. |
-| **Prueba (HMI)** | Start/Stop test events, elapsed time, live trend since start, comments per sensor or general, recent tests with report links. |
-| **Alarmas** | Active alarms, alarm history (episodes) for 24 h / 7 d / 30 d, click a row to see the sensor around the event. |
-| **Históricos** | Any time range + any sensors → chart; export to Excel or CSV. |
-| **Reportes** | Test reports (created on Stop) and weekly reports, as HTML (printable to PDF) and Excel. |
+| **Resumen** (free run) | One dial per sensor from `config.json` with its limit scale (grey / yellow warning / red alarm) and state in text, KPIs, process indicators (if the site defines them), a short system card, active alarms. Monitoring only; nothing is recorded as a test. |
+| **Prueba (HMI)** | Start/Stop test events, elapsed time, live trend since start (warning/alarm lines), comments per sensor or general, recent tests with report links. |
+| **Alarmas** | Active alarms; for 24 h / 7 d / 30 d: totals (alarms, warnings, read errors), the sensor with most events, events per day, the episode table (click a row to see the sensor around the event) and Excel export. |
+| **Históricos** | Any time range + any sensors → chart (one axis per unit, warning/alarm lines) and a per-sensor summary (min/avg/max/last, readings in warning or alarm); export to Excel or CSV. |
+| **Reportes** | Test reports (created on Stop) and weekly reports, as HTML (printable to PDF) and Excel, with the process indicators' averages. |
+| **Sistema** | Gateway and hardware data, CPU / RAM / disk against `system_limits` with their 24 h min/avg/max, connections (AWS, Modbus, WiFi, OLED), uptime. |
+
+The layout follows `docs/propuesta-tablero/` (navy header band with tabs, light theme with the water-waves background; **Fondo** switches to the dark theme). It adapts to desktop, tablet and phone: dials become bars and tables become one card per row on narrow screens.
 
 All data shown comes from the real gateway through AWS IoT. The only exception is the local mock server (see [Local development](#local-development)), which is clearly marked as synthetic.
 
@@ -192,10 +195,11 @@ Open `DashboardUrl`. The header pill should show **Gateway en línea**.
 
 ### Free-run monitoring
 Open **Resumen**. The dials update every 10 s (the gateway publishes every `poll_interval` = 20 s).
-- **Blue** is normal. **Orange** means the value is within the warn margin (default 10 % of the range) of a limit.
-- **Red** with a red outline means alarm: the gateway flagged LOW/HIGH against `min`/`max` in `config.json`.
-- **ERR** with a dashed outline means a read error (`BUS_ERROR`/`EXCEPTION`).
+- **Normal** (cyan needle, grey frame). **Advertencia** (yellow frame) means the value is within the warn margin (`warn_margin`, default 10 % of the range) of a limit.
+- **Alarma** (red frame) means the gateway flagged LOW/HIGH against `min`/`max` in `config.json`.
+- **Error de lectura** (dashed frame, value `ERR`) means `BUS_ERROR`/`EXCEPTION`.
 - If no message arrives for 3 poll intervals, the pill turns red (**Gateway sin datos**).
+- **Indicadores del proceso** (only on sites with a `derived` section, see [Process indicators](#process-indicators-and-resource-thresholds)) are computed in the browser from the live values, with the same states.
 
 ### Running a test
 1. Go to **Prueba (HMI)** and fill in *Nombre*, *Operador* and optional *Notas*.
@@ -207,10 +211,13 @@ Open **Resumen**. The dials update every 10 s (the gateway publishes every `poll
 The test report covers the test window and includes: per-sensor statistics (samples, availability, min/avg/max/std, first/last, % time in alarm), trends, alarm events, comments, data gaps and system health.
 
 ### Alarms
-**Alarmas** lists active alarms and the history of alarm *episodes*. Consecutive out-of-range samples are merged into one event with start, end, duration and peak. Click a row to open the sensor's trend around that event.
+**Alarmas** lists active alarms and the history of *episodes* for 24 h / 7 d / 30 d. Consecutive samples of the same kind are merged into one event with start, end, duration and peak. Kinds: **alarm** (LOW/HIGH from the gateway), **warning** (`WARN_LOW`/`WARN_HIGH`: within `warn_margin` of a limit, computed by the API from each sensor's limits) and **read error**. Above the table: totals per kind, the sensor with most events and a stacked chart of events per day. Click a row to open the sensor's trend around that event; **Excel** downloads the episodes. Reports keep listing alarms and read errors only.
 
 ### Querying stored data
-In **Históricos**, pick a range (or 1 h / 6 h / 24 h / 7 d), select sensors, then click **Consultar**. Points are averaged per bucket, sized automatically for the range. **Excel** / **CSV** exports the same range. Ranges are limited to 31 days.
+In **Históricos**, pick a range (or 1 h / 6 h / 24 h / 7 d), choose sensors in the **Sensores** drop-down, then click **Consultar**. Points are averaged per bucket, sized automatically for the range. Below the chart, **Resumen del rango** shows each sensor's min / average / max / last value and how many readings were in warning or alarm. **Excel** / **CSV** exports the same range. Ranges are limited to 31 days.
+
+### System
+**Sistema** shows the gateway (client, id, last reading, local time, sampling), the hardware (model, serial, hostname, IP, OS), CPU / RAM / disk with a yellow / red frame at the site's `system_limits` (default 80 % / 90 %) and their min / avg / max over the last 24 h, and the connections: AWS (since when), Modbus (port or simulated), WiFi (network, profile `akvo-wifi1`/`2`, signal; *No se usa* on a wired Pi) and the OLED. Uptime, WiFi, Modbus and OLED come from gateway code of 2026-10-23 or later; an older Pi shows "—".
 
 ### Weekly report
 Generated automatically every Monday at 06:00 (Mexico City) for the previous ISO week (Mon–Sun), in HTML and Excel. To create one on demand, go to **Reportes**, enter a week (e.g. `2026-W39`, or leave it empty for last week) and click **Generar**. Or run:
@@ -290,6 +297,27 @@ and its entry in `config/sites/<key>.json`:
 ```
 
 Keys are always `DEVICE_ID.SensorName` and are case-sensitive. A sensor without an override still shows up, with its raw name and unit.
+
+### Process indicators and resource thresholds
+
+Both live in the site's overrides file and are published with step 3 (`deploy_web.sh`); no stack or gateway change.
+
+**Process indicators** (`derived`): values computed from existing sensors, shown in **Resumen** and in the reports (period average). Only three fixed operations exist - nothing in the file is run as code: `ratio` (a ÷ b × `scale`), `diff` (a − b) and `balance` (a − each of `minus`). `sync_config.py` refuses unknown sensors or operations and `min` ≥ `max`. `provisional: true` labels the limits as *provisionales* on the page and in the reports. Example (site `cmd4`, reverse osmosis):
+
+```json
+"derived": [
+  {"key": "REC", "label": "Recuperación", "unit": "%", "op": "ratio", "a": "DEV_7.Fj2_flujo_de_permeado",
+   "b": "DEV_6.Fj1_flujo_de_alimentacion", "scale": 100, "min": 50, "max": 85, "decimals": 0},
+  {"key": "DPF", "label": "ΔP del filtro", "unit": "psi", "op": "diff", "a": "DEV_1.P1_pre_filtro",
+   "b": "DEV_2.P2_pos_filtro", "min": 0, "max": 15},
+  {"key": "BAL", "label": "Balance de flujos", "unit": "gpm", "op": "balance", "a": "DEV_6.Fj1_flujo_de_alimentacion",
+   "minus": ["DEV_7.Fj2_flujo_de_permeado", "DEV_8.Fj3_flujo_de_rechazo"], "min": -1, "max": 1}
+]
+```
+
+The warning band is `warn_margin` of the indicator's range (from `defaults`, or per entry). A site without `derived` doesn't show the card.
+
+**Gateway resource thresholds** (`system_limits`): `[warning, alarm]` in % for the **Sistema** view, default `{"cpu": [80, 90], "ram": [80, 90], "disk": [80, 90]}`; set only the ones that differ, e.g. `"system_limits": {"disk": [70, 85]}`.
 
 **Only rename a displayed unit or label** (e.g. `Mpa` → `kPa`): step 3 only. Edit `units` or the sensor's entry in the overrides. The gateway and the stored values are unchanged.
 
@@ -698,7 +726,10 @@ All routes require the header `X-Api-Key`. Times are epoch ms or ISO-8601.
 | `GET /config` | Sensor/gateway config used by the dashboard |
 | `GET /live` | Latest values, active alarms, system data, `online`, `age_s` |
 | `GET /history?from&to&sensors=DEV_5.PhSensor,…&bucket_ms` | Bucketed avg/min/max per sensor |
-| `GET /alarms?from&to&sensors` | Alarm episodes |
+| `GET /alarms?from&to&sensors` | Episodes (alarms, warnings near a limit, read errors; default 24 h) and `summary` (totals per kind, top sensor, events per day) |
+| `GET /alarms/export?from&to&sensors` | Episodes as XLSX; presigned download URL |
+| `GET /history/stats?from&to&sensors` | Per sensor: min/avg/max/last, readings in alarm / warning / read error |
+| `GET /system/stats?from&to` | CPU / RAM / disk min/avg/max (default 24 h) |
 | `GET /export?from&to&sensors&format=xlsx\|csv` | Presigned download URL |
 | `GET /tests` · `GET /tests/active` · `GET /tests/{id}` | Tests (with comments) |
 | `POST /tests/start` `{name, operator, notes}` | Start a test (409 if one is running) |
@@ -713,6 +744,8 @@ All routes require the header `X-Api-Key`. Times are epoch ms or ISO-8601.
 
 | Symptom | Check |
 |---|---|
+| Page unstyled, tabs do nothing, values "Sin datos" right after a deploy | The browser kept an older CSS/JS. Reload with Ctrl+Shift+R once. `deploy_web.sh` uploads everything with `Cache-Control: no-cache` (since 2026-10-23), so later deploys show at once |
+| Red banner "No se pudo cargar la librería de gráficas" | Highcharts (from `cdn.jsdelivr.net`) didn't load: offline or blocked network. Data, dials and tables still work; only charts are missing. `code.highcharts.com` was dropped because it answered 403 on some networks |
 | Dashboard shows "No se pudo cargar la configuración" | `web/app-config.js` values; `config/config.json` missing → run `sync_config.py` |
 | Pill says *Gateway sin datos* | Gateway running and connected? `latest/data.json` timestamp; `errors/iot/` in the bucket |
 | History empty but live works | Firehose buffers ~60 s; check `raw/data/dt=…/` exists; `PartitionStartDate` not after your data |
@@ -730,6 +763,6 @@ All routes require the header `X-Api-Key`. Times are epoch ms or ISO-8601.
 
 **Security notes:**
 - The API key is visible to anyone who can load the page. It only gates and throttles casual access. For a public demo, add Cognito login or CloudFront access restrictions.
-- Highcharts requires a commercial license for commercial use.
+- Highcharts (loaded from jsDelivr, `cdn.jsdelivr.net/npm/highcharts@12.1.2`) requires a commercial license for commercial use.
 
 **Remove a site's stack:** see [Removing a site](#removing-a-site). The data bucket (`venko-<key>-<account>-<region>`) has `DeletionPolicy: Retain`, so the stack delete leaves it and its sensor history in place. Empty and delete it by hand only if you really want the data gone.

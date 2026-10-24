@@ -328,7 +328,13 @@ python3 tools/sync_config.py --init --source ../Akvo_Green/sites/$KEY/config_dat
 }
 ```
 
-Keys are `DEVICE_ID.SensorName`, exactly as in `devices.csv` (case-sensitive). Publish config and web app to the site:
+Keys are `DEVICE_ID.SensorName`, exactly as in `devices.csv` (case-sensitive).
+
+Optional, in the same file:
+- `derived`: process indicators computed from the sensors (ratio, difference, balance) with their limits, shown in **Resumen** and in the reports. Example and rules: README, "Process indicators and resource thresholds".
+- `system_limits`: CPU / RAM / disk warning and alarm % for the **Sistema** view (default 80 / 90).
+
+Publish config and web app to the site:
 
 ```bash
 bash tools/deploy_web.sh venko-$KEY ../Akvo_Green/sites/$KEY/config_data/config.json config/sites/$KEY.json
@@ -507,6 +513,7 @@ Commit and push both repos. Check that nothing points at the old site: `grep -rn
 | Dashboard: `deploy_web.sh` refuses to upload | Config topics ≠ stack topics | Fix `aws.csv` topics, rebuild |
 | Real sensors: `unexpected keyword argument 'simulate'` | Known gateway bug with `simulate_enabled=0` | Stay in simulate mode until it's fixed in Akvo_Green |
 | `akvo-modbus`: `no $DISPLAY` | Started from SSH | Run it in the Pi's desktop/VNC, or `DISPLAY=:0 akvo-modbus` |
+| Dashboard unstyled or tabs dead after a deploy | Browser kept old CSS/JS | Reload once with Ctrl+Shift+R |
 | Random reboots, SD errors | Under-voltage | `vcgencmd get_throttled` ≠ `0x0` → better cable or official supply |
 
 Full reference: `VenkoDemo/README.md` ("Adding a site") and `Akvo_Green/docs/edge_node_config/CONFIGURATION.md`.

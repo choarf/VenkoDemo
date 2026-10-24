@@ -26,9 +26,11 @@ export function fillTable(table, headers, rows, { empty = "Sin datos", onRow } =
   if (!rows.length) tb.append(el("tr", {}, el("td", { class: "empty", colspan: headers.length }, empty)));
   rows.forEach((r, i) => {
     const tr = el("tr", onRow ? { class: "clickable", onclick: () => onRow(i) } : {});
-    r.forEach((c) => {
-      if (c && typeof c === "object" && !(c instanceof Node)) tr.append(el("td", { class: c.class }, c.node ?? c.text ?? ""));
-      else tr.append(el("td", {}, c ?? "—"));
+    // data-label: the column name, shown beside each cell when narrow screens stack the table.
+    r.forEach((c, j) => {
+      const label = headers[j];
+      if (c && typeof c === "object" && !(c instanceof Node)) tr.append(el("td", { class: c.class, "data-label": label }, c.node ?? c.text ?? ""));
+      else tr.append(el("td", { "data-label": label }, c ?? "—"));
     });
     tb.append(tr);
   });
@@ -85,4 +87,5 @@ export function storageSet(k, v) {
   try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ }
 }
 
-export const KIND_LABEL = { HIGH: "Alto", LOW: "Bajo", BUS_ERROR: "Error bus", EXCEPTION: "Error lectura" };
+export const KIND_LABEL = { HIGH: "Alarma alta", LOW: "Alarma baja", WARN_HIGH: "Advertencia alta", WARN_LOW: "Advertencia baja",
+  BUS_ERROR: "Error bus", EXCEPTION: "Error lectura" };
