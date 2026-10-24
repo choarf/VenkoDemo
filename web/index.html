@@ -201,7 +201,11 @@
         <p class="muted small">Los datos del equipo, la red y las conexiones requieren la contraseña de Sistema de este sitio.</p>
         <form id="sysLoginForm" autocomplete="on">
           <input type="text" name="username" value="sistema" autocomplete="username" hidden>
-          <label>Contraseña<input type="password" name="password" autocomplete="current-password" required minlength="8"></label>
+          <label for="sysPassword">Contraseña</label>
+          <div class="pw-field">
+            <input type="password" id="sysPassword" name="password" autocomplete="current-password" required minlength="8">
+            <button class="ghost pw-toggle" id="sysPwToggle" type="button" aria-controls="sysPassword" aria-pressed="false">Mostrar</button>
+          </div>
           <button class="btn" type="submit">Entrar</button>
         </form>
         <p class="muted small" id="sysLoginMsg" role="status"></p>

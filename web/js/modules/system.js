@@ -152,12 +152,22 @@ export function initSystem(config) {
       const { token } = await api.systemLogin(f.elements.password.value);
       setToken(token);
       f.reset();
+      $("sysPassword").type = "password";
+      $("sysPwToggle").textContent = "Mostrar";
+      $("sysPwToggle").setAttribute("aria-pressed", "false");
       await refresh();
     } catch (err) {
       $("sysLoginMsg").textContent = err.status === 401 ? "Contraseña incorrecta." : `Error: ${err.message}`;
     } finally { btn.disabled = false; }
   });
   $("sysLogout").addEventListener("click", () => showLocked("Sesión de Sistema cerrada."));
+  $("sysPwToggle").addEventListener("click", () => {
+    const input = $("sysPassword"), show = input.type === "password";
+    input.type = show ? "text" : "password";
+    $("sysPwToggle").textContent = show ? "Ocultar" : "Mostrar";
+    $("sysPwToggle").setAttribute("aria-pressed", String(show));
+    input.focus();
+  });
 }
 
 export function onShow() {
