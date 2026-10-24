@@ -47,12 +47,29 @@ cat > "$TMP/app-config.js" <<JS
 window.VENKO = { apiBase: "$API_URL", apiKey: "$API_KEY" };
 JS
 
-# no-cache: browsers revalidate every file on each load (a 304 when unchanged). Without a
-# Cache-Control header they cached the page's files by their own rules for hours, and after a
-# deploy mixed a new index.html with an old CSS/JS - an unstyled header and dead tabs.
+# Version stamp: the uploaded copy asks for css/js as "file?v=<hash of web/>", including every
+# ES-module import, so a browser that kept an older CSS/JS (before no-cache, or by its own rules)
+# can't mix it with a new index.html - that gave an unstyled header and dead tabs.
+cp -r "$ROOT/web" "$TMP/web"
+VERSION="$(cd "$ROOT/web" && find . -type f ! -name 'app-config*.js' -print0 | sort -z | xargs -0 sha1sum | sha1sum | cut -c1-10)"
+python3 - "$TMP/web" "$VERSION" <<'PY'
+import pathlib, re, sys
+root, v = pathlib.Path(sys.argv[1]), sys.argv[2]
+index = root / "index.html"
+html = index.read_text(encoding="utf-8")
+html = re.sub(r'(href="css/[^"?]+\.css)"', rf'\1?v={v}"', html)
+html = re.sub(r'(src="js/[^"?]+\.js)"', rf'\1?v={v}"', html)
+index.write_text(html, encoding="utf-8")
+for js in root.glob("js/**/*.js"):
+    src = js.read_text(encoding="utf-8")
+    js.write_text(re.sub(r'(from "\./[^"?]+\.js)"', rf'\1?v={v}"', src), encoding="utf-8")
+PY
+echo "web version $VERSION"
+
+# no-cache: browsers revalidate every file on each load (a 304 when unchanged).
 # cp (not sync) so files that didn't change also get the header; sync --delete then only removes.
-aws s3 cp "$ROOT/web/" "s3://$WEB_BUCKET/" --recursive --only-show-errors --cache-control "no-cache" \
+aws s3 cp "$TMP/web/" "s3://$WEB_BUCKET/" --recursive --only-show-errors --cache-control "no-cache" \
   --exclude "app-config.example.js" --exclude "app-config.js"
-aws s3 sync "$ROOT/web/" "s3://$WEB_BUCKET/" --delete --only-show-errors --exclude "app-config.example.js" --exclude "app-config.js"
+aws s3 sync "$TMP/web/" "s3://$WEB_BUCKET/" --delete --only-show-errors --exclude "app-config.example.js" --exclude "app-config.js"
 aws s3 cp "$TMP/app-config.js" "s3://$WEB_BUCKET/app-config.js" --only-show-errors --cache-control "no-cache"
 echo "Dashboard: $(out DashboardUrl)"

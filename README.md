@@ -744,7 +744,7 @@ All routes require the header `X-Api-Key`. Times are epoch ms or ISO-8601.
 
 | Symptom | Check |
 |---|---|
-| Page unstyled, tabs do nothing, values "Sin datos" right after a deploy | The browser kept an older CSS/JS. Reload with Ctrl+Shift+R once. `deploy_web.sh` uploads everything with `Cache-Control: no-cache` (since 2026-10-23), so later deploys show at once |
+| Page unstyled, tabs do nothing, values "Sin datos" right after a deploy | The browser kept an older CSS/JS. Reload with Ctrl+Shift+R once. `deploy_web.sh` uploads everything with `Cache-Control: no-cache` and version-stamps every CSS/JS URL and module import (`?v=<hash of web/>`), so later deploys show at once without a hard reload |
 | Red banner "No se pudo cargar la librería de gráficas" | Highcharts (from `cdn.jsdelivr.net`) didn't load: offline or blocked network. Data, dials and tables still work; only charts are missing. `code.highcharts.com` was dropped because it answered 403 on some networks |
 | Dashboard shows "No se pudo cargar la configuración" | `web/app-config.js` values; `config/config.json` missing → run `sync_config.py` |
 | Pill says *Gateway sin datos* | Gateway running and connected? `latest/data.json` timestamp; `errors/iot/` in the bucket |
