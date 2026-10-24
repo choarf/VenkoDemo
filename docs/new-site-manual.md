@@ -279,6 +279,7 @@ One CloudFormation stack per site holds the storage, API, reports and dashboard.
 ```toml
 [plant5.deploy.parameters]
 stack_name = "venko-plant5"
+tags = "Project=\"Venko\" Site=\"plant5\" Client=\"<client>\""
 resolve_s3 = true
 s3_prefix = "venko-plant5"
 region = "us-east-1"

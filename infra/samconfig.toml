@@ -3,6 +3,7 @@ version = 0.1
 # Site "cmd4" - deploy with: sam deploy --config-env cmd4
 [cmd4.deploy.parameters]
 stack_name = "venko-cmd4"
+tags = "Project=\"Venko\" Site=\"cmd4\" Client=\"Keken\""
 resolve_s3 = true
 s3_prefix = "venko-cmd4"
 region = "us-east-1"
@@ -17,6 +18,7 @@ region = "us-east-1"
 # Site "demo" - deploy with: sam deploy --config-env demo
 [demo.deploy.parameters]
 stack_name = "venko-demo"
+tags = "Project=\"Venko\" Site=\"demo\" Client=\"Ghotrix\""
 resolve_s3 = true
 s3_prefix = "venko-demo"
 region = "us-east-1"
@@ -31,6 +33,7 @@ region = "us-east-1"
 # Site "akvo01005" - deploy with: sam deploy --config-env akvo01005
 [akvo01005.deploy.parameters]
 stack_name = "venko-akvo01005"
+tags = "Project=\"Venko\" Site=\"akvo01005\" Client=\"SEMCA\""
 resolve_s3 = true
 s3_prefix = "venko-akvo01005"
 region = "us-east-1"

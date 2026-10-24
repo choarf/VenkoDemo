@@ -460,6 +460,7 @@ cd ../../..
 ```toml
 [plant5.deploy.parameters]
 stack_name = "venko-plant5"
+tags = "Project=\"Venko\" Site=\"plant5\" Client=\"<client>\""
 resolve_s3 = true
 s3_prefix = "venko-plant5"
 region = "us-east-1"
@@ -572,7 +573,39 @@ It lives entirely in Akvo_Green (`gateway/history_web.py`, service `akvo-history
 | Dashboard code change (`web/`) | run `deploy_web.sh` for **every** site |
 | Disable a lost Pi | `aws iot update-certificate --certificate-id <id> --new-status INACTIVE` |
 | Site summary (after any change) | `python3 tools/site_summary.py <key>` |
+| AWS cost of a site, by category | `python3 tools/site_costs.py <key> [--by service\|component\|usage]` |
 | Local dashboard on the Pi | `web_enabled=1` in `sites/<key>/config_data/system.csv` → `build` → `push_site.sh <key>` (first time: `./install.sh --skip-certs` on the Pi) |
+
+### Cost per site
+
+Every resource of a site's stack is tagged three ways, so Cost Explorer can split the bill per site and per category:
+
+- `aws:cloudformation:stack-name` = `venko-<key>`, set by CloudFormation. It's active as a cost allocation tag, and backfilled from 2026-09-01.
+- `Project` / `Site` / `Client`, the stack tags from `samconfig.toml`'s `tags` line. Every new site needs this line.
+- `Component` per resource (`template.yaml`):
+
+| Component | Resources |
+|---|---|
+| `ingest` | IoT rules, Firehose streams |
+| `storage` | data bucket |
+| `api` | API Gateway, API Lambda, DynamoDB table, API logs |
+| `query` | Athena workgroup (history, alarms, reports) |
+| `reports` | report Lambda, report logs |
+| `web` | web bucket, CloudFront |
+
+The user tags can only be activated for billing a few hours after a resource first carries them: `python3 tools/site_costs.py --activate-tags`. Grouping by `Component` works from then on.
+
+```bash
+python3 tools/site_costs.py                       # all sites by service, last 3 months, plus the account total
+python3 tools/site_costs.py cmd4 --by component   # one site by category
+python3 tools/site_costs.py --by usage --months 1 # finest grain (requests, GB-month, ...)
+python3 tools/site_costs.py --budgets <email> --limit 5   # monthly budget per site (rerun for a new site)
+```
+
+- **Budgets:** each site has a budget, `venko-<key>-monthly` (USD 5). It emails at 80% and 100% of actual spend and at 100% of forecast.
+- **Not split per site:** IoT Core messaging and rule charges are billed per account. They show only in the account total, as "AWS IoT". One message every 20 s plus one system message per minute is about 175,000 messages a month, which costs cents.
+- **Other projects:** the account total includes the account's other projects (S3, EC2, VPC). Cost Explorer requests cost USD 0.01 each.
+- **Lambda logs:** they go to `/venko/venko-<key>/{api,report}`, kept 30 days. The older `/aws/lambda/venko-<key>-*` groups that Lambda created itself have no retention and can be deleted.
 
 ### Removing a site
 
@@ -684,7 +717,7 @@ All routes require the header `X-Api-Key`. Times are epoch ms or ISO-8601.
 | Pill says *Gateway sin datos* | Gateway running and connected? `latest/data.json` timestamp; `errors/iot/` in the bucket |
 | History empty but live works | Firehose buffers ~60 s; check `raw/data/dt=…/` exists; `PartitionStartDate` not after your data |
 | History/alarms error "query failed" | Athena console → workgroup `venko-<key>-wg` → recent queries for the message |
-| Report stuck on *Generando reporte…* | CloudWatch logs of `venko-<key>-report`; use **Reintentar** |
+| Report stuck on *Generando reporte…* | CloudWatch log group `/venko/venko-<key>/report`; use **Reintentar** |
 | CORS error in browser console | `AllowedOrigin` must equal the exact dashboard origin |
 | `sam deploy` fails with `Failed to create changeset ... AWS::EarlyValidation::ResourceExistenceCheck` before the confirmation prompt | `WebBucketName` and `DataBucketName` were given the same value - they must be two distinct bucket names (or left blank for the defaults) |
 | `sam build --template <key>.yaml` says `Template file not found` | There is only one template, `template.yaml`, shared by every site - only `samconfig.toml`'s per-env section differs |

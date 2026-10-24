@@ -65,6 +65,8 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
+      Tags:
+        - { Key: Component, Value: storage }
       BucketName: !If [HasDataBucketName, !Ref DataBucketName, !Sub "venko-demo-${AWS::AccountId}-${AWS::Region}"]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -94,6 +96,8 @@ Resources:
   AppTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      Tags:
+        - { Key: Component, Value: api }
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - { AttributeName: pk, AttributeType: S }
@@ -131,6 +135,8 @@ Resources:
   DataStream:
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
+      Tags:
+        - { Key: Component, Value: ingest }
       DeliveryStreamType: DirectPut
       ExtendedS3DestinationConfiguration:
         BucketARN: !GetAtt DataBucket.Arn
@@ -143,6 +149,8 @@ Resources:
   SystemStream:
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
+      Tags:
+        - { Key: Component, Value: ingest }
       DeliveryStreamType: DirectPut
       ExtendedS3DestinationConfiguration:
         BucketARN: !GetAtt DataBucket.Arn
@@ -178,6 +186,8 @@ Resources:
   DataRule:
     Type: AWS::IoT::TopicRule
     Properties:
+      Tags:
+        - { Key: Component, Value: ingest }
       TopicRulePayload:
         AwsIotSqlVersion: "2016-03-23"
         RuleDisabled: false
@@ -200,6 +210,8 @@ Resources:
   SystemRule:
     Type: AWS::IoT::TopicRule
     Properties:
+      Tags:
+        - { Key: Component, Value: ingest }
       TopicRulePayload:
         AwsIotSqlVersion: "2016-03-23"
         RuleDisabled: false
@@ -302,6 +314,8 @@ Resources:
   AthenaWorkGroup:
     Type: AWS::Athena::WorkGroup
     Properties:
+      Tags:
+        - { Key: Component, Value: query }
       Name: !Sub "${AWS::StackName}-wg"
       RecursiveDeleteOption: true
       WorkGroupConfiguration:
@@ -314,6 +328,8 @@ Resources:
   Api:
     Type: AWS::Serverless::Api
     Properties:
+      Tags:
+        Component: api
       StageName: prod
       Cors:
         AllowOrigin: !Sub "'${AllowedOrigin}'"
@@ -329,6 +345,10 @@ Resources:
   ApiFunction:
     Type: AWS::Serverless::Function
     Properties:
+      LoggingConfig:
+        LogGroup: !Ref ApiFunctionLogs
+      Tags:
+        Component: api
       FunctionName: !Sub "${AWS::StackName}-api"
       Handler: api.router.handler
       Timeout: 29
@@ -355,6 +375,10 @@ Resources:
   ReportFunction:
     Type: AWS::Serverless::Function
     Properties:
+      LoggingConfig:
+        LogGroup: !Ref ReportFunctionLogs
+      Tags:
+        Component: reports
       FunctionName: !Sub "${AWS::StackName}-report"
       Handler: api.reports.report_handler
       Timeout: 300
@@ -374,10 +398,31 @@ Resources:
             Schedule: cron(0 12 ? * MON *)
             Input: '{"kind": "weekly"}'
 
+  # Lambda logs, kept 30 days and tagged for cost per site. (The
+  # /aws/lambda/<function> groups Lambda created on its own before these
+  # existed have no retention; delete them once these are in use.)
+  ApiFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/venko/${AWS::StackName}/api"
+      RetentionInDays: 30
+      Tags:
+        - { Key: Component, Value: api }
+
+  ReportFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/venko/${AWS::StackName}/report"
+      RetentionInDays: 30
+      Tags:
+        - { Key: Component, Value: reports }
+
   # ------------------------------------------------------------ web hosting
   WebBucket:
     Type: AWS::S3::Bucket
     Properties:
+      Tags:
+        - { Key: Component, Value: web }
       BucketName: !If [HasWebBucketName, !Ref WebBucketName, !Ref AWS::NoValue]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -397,6 +442,8 @@ Resources:
   WebDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
+      Tags:
+        - { Key: Component, Value: web }
       DistributionConfig:
         Enabled: true
         DefaultRootObject: index.html
