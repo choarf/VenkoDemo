@@ -36,6 +36,9 @@ cd infra && sam build --template template.yaml && sam deploy --config-env <key>
 # publish dashboard config + web/ to a site
 tools/deploy_web.sh <stack> <gateway-config.json> <overrides.json>
 
+# send the committed gateway config through the IoT shadow (sites with shadow_enabled=1)
+python3 tools/push_shadow.py <key> [--status | --dry-run]
+
 # per-site summary page (AWS resources, URLs, IoT, live status) -> docs/sites/<key>.md
 python3 tools/site_summary.py <samconfig-env> [--pi user@host]
 
@@ -68,6 +71,8 @@ Python 3.14 (Lambda runtime `python3.14`). `.gitignore` lists `infra/.aws-sam/` 
 - `settings.py` — all runtime config from Lambda env vars (set in the template's `Globals`); `MAX_RANGE_DAYS = 31` caps Athena scans.
 
 **Sensor config pipeline.** Sensors are not hard-coded anywhere. `tools/sync_config.py` reads the gateway's `config.json` (from `../Akvo_Green`), strips the `aws`/`modbus` sections (cert paths must never be uploaded), merges display overrides (`config/sites/<key>.json`; keys are case-sensitive `DEVICE_ID.SensorName`), and uploads to `s3://<data bucket>/config/config.json`. The API, reports and dashboard all read that. Overrides may also carry `derived` (process indicators: fixed ops `ratio`/`diff`/`balance` in `backend/common/derived.py`, mirrored in `overview.js`; validated by `sync_config.derived_entries`) and `system_limits` (CPU/RAM/disk warning/alarm % for the Sistema view). New sensors need no stack redeploy.
+
+**Config shadow.** On sites with Akvo_Green `aws.csv` `shadow_enabled=1` (now `akvo01002`), `tools/push_shadow.py <key>` sends the committed gateway `config.json` (minus `aws` and the serial settings; `modbus.simulate` included) to the IoT named shadow `config` of thing `AKVO_<key>`, then runs `sync_config.py`; `--status` compares desired/reported hashes. It imports `shadow_subset`/`config_hash` from `../Akvo_Green/gateway/shadow_sync.py` (`backend/tests/test_push_shadow.py` checks they agree). Git stays the source of truth: it refuses uncommitted site files. README "Config through the IoT shadow".
 
 **Multi-site.** One Pi = one stack = one dashboard; sites share code and AWS account only. Current sites: `cmd4`, `akvo01005`, `akvo01002`. A site key is lowercase and is used everywhere: samconfig env `<key>`, stack `venko-<key>`, topics `VENKO/<key>/{data,system}`, buckets `venko-<key>-…`, Glue DB `venko_<key>`, overrides `config/sites/<key>.json`, gateway folder `../Akvo_Green/sites/<key>/` (its `aws.csv` topics and `certs/policy.json` must use the same lowercase key — IoT policy resources are case-sensitive). Per-site params live in `infra/samconfig.toml` sections (`[cmd4.*]`, …; there is no `[default.*]`, so always pass `--config-env`). The README's "Step by step: from a blank SD card…" section is the full procedure for adding a site. `deploy_web.sh` refuses to upload if the gateway config's topics don't match the stack's, and writes `app-config.js` (API URL + key) straight to that site's web bucket — never into `web/` — so sites can't overwrite each other. A change to `web/` must be deployed to **every** site. Every samconfig section needs a `tags = "Project=... Site=<key> Client=..."` line and every new resource a `Component` tag (cost per site). Don't change `DataBucketName` on an existing stack (bucket is `Retain`; a new empty one would be created).
 

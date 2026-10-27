@@ -274,7 +274,7 @@ python3 config_manager.py build --config-dir ../sites/<key>/config_data --dry-ru
 python3 config_manager.py build --config-dir ../sites/<key>/config_data             # writes its config.json
 ```
 
-**2. Send the new `config.json` to the Pi:** `tools/push_site.sh <key> pi@<pi>` (from Akvo_Green). The gateway reloads it within 5 s without a restart.
+**2. Commit, then send the new `config.json` to the Pi:** commit the CSV and the rebuilt `config.json` together in Akvo_Green, then `tools/push_site.sh <key> pi@<pi>` (from Akvo_Green). The gateway reloads it within 5 s without a restart. On a site with the config shadow on (`aws.csv` `shadow_enabled=1`, currently `akvo01002`) use `python3 tools/push_shadow.py <key>` (from VenkoDemo) instead - no SSH needed, and it also does step 3's upload; see [Config through the IoT shadow](#config-through-the-iot-shadow).
 
 **3. Update the dashboard labels and publish the dashboard config:**
 
@@ -289,6 +289,26 @@ python3 tools/sync_config.py $SRC --bucket venko-<key>-884520769610-us-east-1
 - The API and reports cache the config for up to **5 minutes**. Reload the dashboard after that.
 - `tools/deploy_web.sh` also runs this step, but it re-uploads `web/` as well. It's only needed when the dashboard code changes.
 - `sync_config.py` reads Akvo_Green's `config.json` **on this machine**, so always build it here (step 1), even if you edited it on the Pi.
+
+### Config through the IoT shadow
+
+Git is the source of truth: the CSVs and the built `config.json` in Akvo_Green, and `config/sites/<key>.json` here. The Pi, S3 and the shadow only hold copies, so never edit them by hand - commit, then deploy.
+
+On a site with `shadow_enabled=1` in its `aws.csv`, the gateway also takes its config from the AWS IoT named shadow `config` of its thing (`AKVO_<key>`). `tools/push_shadow.py` writes the committed config there as the shadow's *desired* state; the gateway applies it within seconds (or when it next connects, however long it was offline) and *reports* back the hash and git commit of what it runs:
+
+```bash
+python3 tools/push_shadow.py <key>            # send, upload the dashboard config, wait for the Pi
+python3 tools/push_shadow.py <key> --status   # desired vs reported: applied / PENDING / REFUSED
+python3 tools/push_shadow.py <key> --dry-run  # print what would be sent
+```
+
+- It refuses when `sites/<key>/` in Akvo_Green has uncommitted changes, when `client_id` isn't `AKVO_<key>`, when the topics differ from the stack's, or when `shadow_enabled` is off.
+- **Never sent:** the `aws` section and the serial settings in `modbus` (only `modbus.simulate` is). Those still go with `push_site.sh`, so a bad remote change can't cut the Pi off.
+- The gateway validates the config before writing it. A refused one keeps the old config running and shows as `REFUSED: <reason>` in `--status`.
+- `modbus.simulate` (demo mode) and `database.*` are read at start-up: the gateway applies them and restarts itself (`--status` waits for it).
+- Once a site uses the shadow, its desired state wins at every reconnect: send every config change with `push_shadow.py`. A `config.json` copied only with `push_site.sh` is replaced by the older desired config at the next reconnect.
+- **Turning it on for a site:** add the shadow statements to `sites/<key>/certs/policy.json` (see `akvo01002`'s) and apply them with `aws iot create-policy-version --policy-name venko-<key>-gateway --policy-document file://sites/<key>/certs/policy.json --set-as-default` **first** (AWS drops the connection of a gateway subscribing to topics its policy doesn't allow), then set `shadow_enabled=1` in `aws.csv`, build, commit, `tools/push_site.sh <key>`, and `push_shadow.py <key>` once to seed the shadow.
+- **Rollback:** `shadow_enabled=0`, build, commit, `push_site.sh`; `aws iot set-default-policy-version` restores the old policy.
 
 ### Common changes
 
@@ -480,7 +500,12 @@ cp ../../cmd4/certs/AmazonRootCA1.pem .
 cat > policy.json <<JSON
 { "Version": "2012-10-17", "Statement": [
   { "Effect": "Allow", "Action": "iot:Connect", "Resource": "arn:aws:iot:us-east-1:$ACCT:client/$CLIENT" },
-  { "Effect": "Allow", "Action": "iot:Publish", "Resource": "arn:aws:iot:us-east-1:$ACCT:topic/VENKO/$KEY/*" } ] }
+  { "Effect": "Allow", "Action": "iot:Publish", "Resource": [
+      "arn:aws:iot:us-east-1:$ACCT:topic/VENKO/$KEY/*",
+      "arn:aws:iot:us-east-1:$ACCT:topic/\$aws/things/$CLIENT/shadow/name/config/get",
+      "arn:aws:iot:us-east-1:$ACCT:topic/\$aws/things/$CLIENT/shadow/name/config/update" ] },
+  { "Effect": "Allow", "Action": "iot:Subscribe", "Resource": "arn:aws:iot:us-east-1:$ACCT:topicfilter/\$aws/things/$CLIENT/shadow/name/config/*" },
+  { "Effect": "Allow", "Action": "iot:Receive", "Resource": "arn:aws:iot:us-east-1:$ACCT:topic/\$aws/things/$CLIENT/shadow/name/config/*" } ] }
 JSON
 aws iot create-policy --policy-name venko-$KEY-gateway --policy-document file://policy.json
 aws iot attach-policy --policy-name venko-$KEY-gateway --target "$(cat cert.arn)"
