@@ -114,7 +114,7 @@ main { max-width: 1440px; margin: 0 auto; padding-block: 20px 28px; container-ty
 .dial svg { width: 100%; height: auto; display: block; }
 .dial .z-bad { stroke: var(--bad); } .dial .z-warn { stroke: var(--warn); } .dial .z-mid { stroke: var(--line); }
 .dial .track { stroke: var(--gauge-track); }
-.dial .fill { stroke: var(--accent); transition: d .4s; }
+.dial .fill { stroke: var(--accent); transition: stroke-dasharray .4s; }
 .scard.warn .dial .fill { stroke: var(--warn); } .scard.alarm .dial .fill { stroke: var(--bad); } .scard.err .dial .fill, .scard.none .dial .fill { stroke: none; }
 .dial .needle { stroke: var(--fg); } .dial .hub { fill: var(--fg); }
 .dial text { fill: var(--muted); font-size: 11px; font-family: var(--font); }
