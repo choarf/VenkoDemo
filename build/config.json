@@ -1,6 +1,78 @@
 {
-  "generated_at": "2026-10-23T20:37:55.833360+00:00",
-  "source_hash": "22cbc943ae66f56d5cbe125de1cd2ab1",
+  "derived": [
+    {
+      "key": "REC",
+      "label": "Recuperación",
+      "unit": "%",
+      "op": "ratio",
+      "a": "DEV_7.Fj2_flujo_de_permeado",
+      "min": 50,
+      "max": 85,
+      "decimals": 0,
+      "warn_margin": 0.1,
+      "provisional": true,
+      "b": "DEV_6.Fj1_flujo_de_alimentacion",
+      "scale": 100
+    },
+    {
+      "key": "DPF",
+      "label": "ΔP del filtro",
+      "unit": "psi",
+      "op": "diff",
+      "a": "DEV_1.P1_pre_filtro",
+      "min": 0,
+      "max": 15,
+      "decimals": 1,
+      "warn_margin": 0.1,
+      "provisional": true,
+      "b": "DEV_2.P2_pos_filtro"
+    },
+    {
+      "key": "DPM",
+      "label": "ΔP de membranas",
+      "unit": "psi",
+      "op": "diff",
+      "a": "DEV_3.P3_pre_membranas",
+      "min": 0,
+      "max": 40,
+      "decimals": 1,
+      "warn_margin": 0.1,
+      "provisional": true,
+      "b": "DEV_4.P4_pos_membranas"
+    },
+    {
+      "key": "BAL",
+      "label": "Balance de flujos",
+      "unit": "gpm",
+      "op": "balance",
+      "a": "DEV_6.Fj1_flujo_de_alimentacion",
+      "min": -1,
+      "max": 1,
+      "decimals": 1,
+      "warn_margin": 0.1,
+      "provisional": true,
+      "minus": [
+        "DEV_7.Fj2_flujo_de_permeado",
+        "DEV_8.Fj3_flujo_de_rechazo"
+      ]
+    }
+  ],
+  "system_limits": {
+    "cpu": [
+      80,
+      90
+    ],
+    "ram": [
+      80,
+      90
+    ],
+    "disk": [
+      80,
+      90
+    ]
+  },
+  "generated_at": "2026-10-24T00:32:00.515909+00:00",
+  "source_hash": "86d111ff8d4a0e160a55cd0fdeb6dd39",
   "site": {
     "title": "Venko-Keken",
     "brand": "Ghotrix - Semca"

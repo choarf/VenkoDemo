@@ -81,6 +81,9 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
+      Tags:
+      - Key: Component
+        Value: storage
       BucketName:
         Fn::If:
         - HasDataBucketName
@@ -114,6 +117,9 @@ Resources:
   AppTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      Tags:
+      - Key: Component
+        Value: api
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
       - AttributeName: pk
@@ -166,6 +172,9 @@ Resources:
   DataStream:
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
+      Tags:
+      - Key: Component
+        Value: ingest
       DeliveryStreamType: DirectPut
       ExtendedS3DestinationConfiguration:
         BucketARN:
@@ -185,6 +194,9 @@ Resources:
   SystemStream:
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
+      Tags:
+      - Key: Component
+        Value: ingest
       DeliveryStreamType: DirectPut
       ExtendedS3DestinationConfiguration:
         BucketARN:
@@ -235,6 +247,9 @@ Resources:
   DataRule:
     Type: AWS::IoT::TopicRule
     Properties:
+      Tags:
+      - Key: Component
+        Value: ingest
       TopicRulePayload:
         AwsIotSqlVersion: '2016-03-23'
         RuleDisabled: false
@@ -271,6 +286,9 @@ Resources:
   SystemRule:
     Type: AWS::IoT::TopicRule
     Properties:
+      Tags:
+      - Key: Component
+        Value: ingest
       TopicRulePayload:
         AwsIotSqlVersion: '2016-03-23'
         RuleDisabled: false
@@ -414,9 +432,16 @@ Resources:
             Type: string
           - Name: os
             Type: string
+          - Name: net_bytes_recv
+            Type: bigint
+          - Name: net_bytes_sent
+            Type: bigint
   AthenaWorkGroup:
     Type: AWS::Athena::WorkGroup
     Properties:
+      Tags:
+      - Key: Component
+        Value: query
       Name:
         Fn::Sub: ${AWS::StackName}-wg
       RecursiveDeleteOption: true
@@ -429,11 +454,13 @@ Resources:
   Api:
     Type: AWS::Serverless::Api
     Properties:
+      Tags:
+        Component: api
       StageName: prod
       Cors:
         AllowOrigin:
           Fn::Sub: '''${AllowedOrigin}'''
-        AllowHeaders: '''Content-Type,X-Api-Key'''
+        AllowHeaders: '''Content-Type,X-Api-Key,X-System-Token'''
         AllowMethods: '''GET,POST,OPTIONS'''
       Auth:
         ApiKeyRequired: true
@@ -446,6 +473,11 @@ Resources:
   ApiFunction:
     Type: AWS::Serverless::Function
     Properties:
+      LoggingConfig:
+        LogGroup:
+          Ref: ApiFunctionLogs
+      Tags:
+        Component: api
       FunctionName:
         Fn::Sub: ${AWS::StackName}-api
       Handler: api.router.handler
@@ -485,6 +517,11 @@ Resources:
   ReportFunction:
     Type: AWS::Serverless::Function
     Properties:
+      LoggingConfig:
+        LogGroup:
+          Ref: ReportFunctionLogs
+      Tags:
+        Component: reports
       FunctionName:
         Fn::Sub: ${AWS::StackName}-report
       Handler: api.reports.report_handler
@@ -516,9 +553,30 @@ Resources:
       CodeUri: ReportFunction
     Metadata:
       SamResourceId: ReportFunction
+  ApiFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /venko/${AWS::StackName}/api
+      RetentionInDays: 30
+      Tags:
+      - Key: Component
+        Value: api
+  ReportFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /venko/${AWS::StackName}/report
+      RetentionInDays: 30
+      Tags:
+      - Key: Component
+        Value: reports
   WebBucket:
     Type: AWS::S3::Bucket
     Properties:
+      Tags:
+      - Key: Component
+        Value: web
       BucketName:
         Fn::If:
         - HasWebBucketName
@@ -541,6 +599,9 @@ Resources:
   WebDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
+      Tags:
+      - Key: Component
+        Value: web
       DistributionConfig:
         Enabled: true
         DefaultRootObject: index.html

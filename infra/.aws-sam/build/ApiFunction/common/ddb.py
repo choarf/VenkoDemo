@@ -139,3 +139,13 @@ def comments_in_range(from_ms: int, to_ms: int) -> list[dict]:
         out += [_plain(i) for i in res["Items"]]
         day += timedelta(days=1)
     return out
+
+
+def system_password_hash() -> str | None:
+    """The Sistema view's password hash (common/sysauth.py), None when not set yet."""
+    item = _table.get_item(Key={"pk": "AUTH", "sk": "SYSTEM"}).get("Item")
+    return item["hash"] if item else None
+
+
+def set_system_password_hash(value: str) -> None:
+    _table.put_item(Item={"pk": "AUTH", "sk": "SYSTEM", "hash": value})

@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from common import derived as derived_mod
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -42,12 +43,44 @@ def collapse_episodes(rows: list[dict], max_gap_ms: int) -> list[dict]:
     return sorted(episodes, key=lambda e: e["start"])
 
 
+KIND_LABEL = {"HIGH": "Alarma alta", "LOW": "Alarma baja", "WARN_HIGH": "Advertencia alta",
+              "WARN_LOW": "Advertencia baja", "BUS_ERROR": "Error bus", "EXCEPTION": "Error lectura"}
+
+
+def kind_category(kind: str) -> str:
+    """'alarm' | 'warn' | 'err' for an episode kind."""
+    return "alarm" if kind in ("HIGH", "LOW") else "warn" if kind.startswith("WARN_") else "err"
+
+
+def alarm_summary(episodes: list[dict], labels: dict, from_ms: int, to_ms: int, tz: str) -> dict:
+    """Totals per category, the sensor with most episodes and episodes per local day
+    (oldest first) for the Alarmas view."""
+    totals = {"alarm": 0, "warn": 0, "err": 0}
+    per_sensor: dict[str, int] = {}
+    days: dict[str, dict] = {}
+    day = datetime.fromtimestamp(from_ms / 1000, ZoneInfo(tz)).date()
+    last = datetime.fromtimestamp((to_ms - 1) / 1000, ZoneInfo(tz)).date()
+    while day <= last:
+        days[day.isoformat()] = {"day": day.isoformat(), "alarm": 0, "warn": 0, "err": 0}
+        day = day.fromordinal(day.toordinal() + 1)
+    for e in episodes:
+        cat = kind_category(e["kind"])
+        totals[cat] += 1
+        per_sensor[e["k"]] = per_sensor.get(e["k"], 0) + 1
+        d = _local(e["start"], tz, "%Y-%m-%d")
+        if d in days:
+            days[d][cat] += 1
+    top = max(per_sensor.items(), key=lambda kv: kv[1]) if per_sensor else None
+    return {"totals": totals, "days": list(days.values()),
+            "top": {"key": top[0], "label": labels.get(top[0], top[0]), "count": top[1]} if top else None}
+
+
 def _peak(kind, a, b):
     if a is None:
         return b
     if b is None:
         return a
-    return min(a, b) if kind == "LOW" else max(a, b)
+    return min(a, b) if kind.endswith("LOW") else max(a, b)
 
 
 def _local(ms, tz, fmt="%Y-%m-%d %H:%M:%S"):
@@ -86,6 +119,18 @@ def build_context(*, kind: str, title: str, config: dict, from_ms: int, to_ms: i
             "status": status,
         })
 
+    # Indicators from the period averages: for ratio and diff this equals the indicator
+    # over the period (e.g. recovery = total permeate / total feed when samples match).
+    avgs = {s["key"]: s["avg"] for s in sensors}
+    derived = []
+    for d in config.get("derived", []):
+        v = derived_mod.value(d, avgs)
+        st = derived_mod.state(d, v)
+        derived.append({"key": d["key"], "label": d["label"], "unit": d.get("unit", ""),
+                        "avg": _r(v, d.get("decimals", 1)), "lim_min": d["min"], "lim_max": d["max"],
+                        "status": {"ok": "OK", "warn": "ADVERTENCIA", "alarm": "ALARMA", "none": "SIN DATOS"}[st],
+                        "provisional": bool(d.get("provisional"))})
+
     chart_series = {}
     for p in series:
         chart_series.setdefault(p["k"], []).append([p["t"], _r(p["avg"], 3), _r(p["min"], 3), _r(p["max"], 3)])
@@ -118,7 +163,7 @@ def build_context(*, kind: str, title: str, config: dict, from_ms: int, to_ms: i
         "from_local": _local(from_ms, tz), "to_local": _local(to_ms, tz),
         "duration_h": _r((to_ms - from_ms) / 3_600_000, 2),
         "generated_local": _local(generated_ms, tz),
-        "sensors": sensors, "series": chart_series, "bucket_min": _r(bucket_ms / 60000, 2),
+        "sensors": sensors, "derived": derived, "series": chart_series, "bucket_min": _r(bucket_ms / 60000, 2),
         "episodes": episodes, "gaps": gap_rows,
         "data_availability": _r(max(0.0, 100.0 * (1 - missing_ms / max(1, to_ms - from_ms))), 1),
         "system": system or {}, "comments": comment_rows,
@@ -193,6 +238,12 @@ def render_xlsx(ctx: dict) -> bytes:
                 c.fill = _ALARM_FILL
     for i in range(3, len(head) + 1):
         ws.column_dimensions[get_column_letter(i)].width = max(ws.column_dimensions[get_column_letter(i)].width or 0, 11)
+
+    if ctx.get("derived"):
+        _sheet(wb, "Indicadores", ["Indicador", "Unidad", "Promedio", "Lím. mín", "Lím. máx", "Estado"],
+               [[d["label"] + (" (límites provisionales)" if d["provisional"] else ""), d["unit"], d["avg"],
+                 d["lim_min"], d["lim_max"], d["status"]] for d in ctx["derived"]],
+               widths={"Indicador": 40})
 
     # Wide readings table: one row per time bucket, one column per sensor (average).
     keys = [s["key"] for s in ctx["sensors"]]
