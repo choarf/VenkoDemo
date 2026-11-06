@@ -16,7 +16,7 @@ What the dashboard does:
 
 | View | What it shows |
 |---|---|
-| **Resumen** (free run) | One dial per sensor from `config.json` with its limit scale (grey / yellow warning / red alarm) and state in text, KPIs, process indicators (if the site defines them), a short system card, active alarms. Monitoring only; nothing is recorded as a test. |
+| **Resumen** (free run) | One 290° dial per sensor from `config.json` (needle and fill, limit values in the gap at the bottom) with its limit scale (grey / yellow warning / red alarm) and state in text, KPIs, process indicators (if the site defines them), a short system card, active alarms. Monitoring only; nothing is recorded as a test. |
 | **Prueba (HMI)** | Start/Stop test events, elapsed time, live trend since start (warning/alarm lines), comments per sensor or general, recent tests with report links. |
 | **Alarmas** | Active alarms; for 24 h / 7 d / 30 d: totals (alarms, warnings, read errors), the sensor with most events, events per day, the episode table (click a row to see the sensor around the event) and Excel export. |
 | **Históricos** | Any time range + any sensors → chart (one axis per unit, warning/alarm lines) and a per-sensor summary (min/avg/max/last, readings in warning or alarm); export to Excel or CSV. |
