@@ -99,6 +99,8 @@ port,baudrate,timeout,parity,stopbits,bytesize,simulate_enabled
 
 ## Prerequisites
 
+Setting up a new workstation? [`init.md`](init.md) is the first-time checklist (clone both repos, tools, Python env, AWS access, sanity checks).
+
 - An AWS account in the same region as the gateway's IoT endpoint (`us-east-1`, from `config.json` → `aws.host`).
 - AWS CLI v2 with credentials that can create IAM roles, and the **AWS SAM CLI**.
 - Python 3.14 locally (matches the Lambda runtime, which `sam build` requires) (for `sync_config.py`; `boto3` needed for the upload).
