@@ -8,8 +8,8 @@ The tools reach the gateway repo through `../Akvo_Green`, so the two must be sib
 
 ```bash
 mkdir -p ~/git_reps/claude/projects/Venko && cd ~/git_reps/claude/projects/Venko
-git clone <VenkoDemo remote>  VenkoDemo
-git clone <Akvo_Green remote> Akvo_Green
+git clone https://github.com/choarf/VenkoDemo.git VenkoDemo
+git clone git@github.com:choarf/Akvo_Green.git   Akvo_Green
 ```
 
 Gateway certificates (`Akvo_Green/sites/<key>/certs/`) are git-ignored; copy them separately if you need to provision or push to a Pi.
