@@ -24,15 +24,19 @@ export function readingState(s, r) {
   return "ok";
 }
 
-// Half-circle dial in a 200x118 box, centre (100, 100); t = 0 (left) .. 1 (right).
+// 290° dial in a 200x182 box, centre (100, 92), gap at the bottom;
+// t = 0 (lower left) .. 1 (lower right), clockwise.
+const SWEEP = 290, START = 90 + SWEEP / 2; // degrees, counter-clockwise from +x
+const CX = 100, CY = 92;
 function pt(r, t) {
-  const a = Math.PI * (1 - t);
-  return [100 + r * Math.cos(a), 100 - r * Math.sin(a)];
+  const a = (START - SWEEP * t) * Math.PI / 180;
+  return [CX + r * Math.cos(a), CY - r * Math.sin(a)];
 }
 function arc(r, t1, t2) {
   if (t2 - t1 < 0.0005) return "M0 0";
   const [x1, y1] = pt(r, t1), [x2, y2] = pt(r, t2);
-  return `M${x1.toFixed(2)} ${y1.toFixed(2)} A${r} ${r} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+  const large = (t2 - t1) * SWEEP > 180 ? 1 : 0;
+  return `M${x1.toFixed(2)} ${y1.toFixed(2)} A${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
 }
 function svg(tag, attrs) {
   const n = document.createElementNS(SVG, tag);
@@ -51,18 +55,18 @@ function sensorCard(s) {
   const tag = el("span", { class: "tag none" }, STATE_TEXT.none);
   const num = el("span", { class: "num" }, "—");
 
-  const dial = svg("svg", { viewBox: "0 0 200 118", role: "img", "aria-label": `${s.label}, límites ${s.min} a ${s.max} ${s.unit}` });
+  const dial = svg("svg", { viewBox: "0 0 200 182", role: "img", "aria-label": `${s.label}, límites ${s.min} a ${s.max} ${s.unit}` });
   const zone = (cls, a, b) => dial.append(svg("path", { d: arc(84, a, b), class: cls, fill: "none", "stroke-width": 8 }));
   zone("z-bad", 0, tMin); zone("z-warn", tMin, tMin + w); zone("z-mid", tMin + w, tMax - w);
   zone("z-warn", tMax - w, tMax); zone("z-bad", tMax, 1);
   dial.append(svg("path", { d: arc(68, 0, 1), class: "track", fill: "none", "stroke-width": 16 }));
   const fill = svg("path", { d: "M0 0", class: "fill", fill: "none", "stroke-width": 16 });
-  const needle = svg("line", { x1: 100, y1: 100, x2: 100, y2: 100, class: "needle", "stroke-width": 3, "stroke-linecap": "round" });
-  dial.append(fill, needle, svg("circle", { cx: 100, cy: 100, r: 6, class: "hub" }));
-  // Limit labels under the arc ends, anchored inward so wide numbers (1000) stay inside the box.
-  for (const [v, t, anchor] of [[s.min, tMin, "start"], [s.max, tMax, "end"]]) {
-    const x = Math.min(198, Math.max(2, pt(92, t)[0] + (anchor === "start" ? -6 : 6)));
-    const label = svg("text", { x: x.toFixed(1), y: 116, "text-anchor": anchor });
+  const needle = svg("line", { x1: CX, y1: CY, x2: CX, y2: CY, class: "needle", "stroke-width": 3, "stroke-linecap": "round" });
+  dial.append(fill, needle, svg("circle", { cx: CX, cy: CY, r: 6, class: "hub" }));
+  // Limit labels in the bottom gap, under the arc ends.
+  for (const [v, t] of [[s.min, 0], [s.max, 1]]) {
+    const [x, y] = pt(84, t);
+    const label = svg("text", { x: x.toFixed(1), y: (y + 16).toFixed(1), "text-anchor": "middle" });
     label.textContent = String(v);
     dial.append(label);
   }
