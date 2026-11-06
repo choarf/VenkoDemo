@@ -65,6 +65,16 @@ Start `claude` from the parent folder `~/git_reps/claude/projects/Venko` so both
 /add-dir /home/chris/git_reps/claude/projects/Venko/VenkoDemo
 ```
 
+## Working from two computers (e.g. work and home)
+
+Claude Code sessions are per computer; only what is in git is shared.
+
+- **Same paths on both**: clone to `~/git_reps/claude/projects/Venko/` everywhere. Claude's per-project memory folder is keyed by the absolute path, and `.claude/settings.local.json` holds an absolute path to Akvo_Green (if the paths differ, run `/add-dir` once on that computer).
+- **Routine**: `git pull` in both repos before starting a session; commit and push both before leaving. Unpushed work doesn't exist on the other computer.
+- **Shared knowledge goes in `CLAUDE.md`** (committed), not in Claude's local memory or chat history, which stay on one computer.
+- **Handoff**: conversations can't be resumed across computers. Push the work with clear commit messages (or a short note) and start the next session with "read the last commits and continue …".
+- **Not in git, set up per computer**: AWS credentials (`aws configure`), gateway certificates (`Akvo_Green/sites/<key>/certs/`), personal `~/.claude/` settings (sync with a dotfiles repo if wanted, but never the whole `~/.claude/` folder: it holds credentials).
+
 ## Gotchas to know before the first commit
 
 - `infra/.aws-sam/` and `__pycache__/` are still tracked and show as modified after builds/tests — stage files by name, never `git add -A`.
